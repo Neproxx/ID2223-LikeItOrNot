@@ -1,0 +1,11 @@
+hopsworks
+praw==7.6.1
+modal-client
+transformers
+sentence-transformers
+torch
+pandas
+xgboost
+joblib
+scikit-learn
+python-dotenv
