@@ -17,6 +17,7 @@ sentiment_model = {
 }
 text_encoder = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
+
 def get_sentiment(text: str):
     """
     Returns three scores for the text: negative, neutral, positive
@@ -45,7 +46,10 @@ def get_text_embedding(text: str):
 
 
 def contains_tldr(text: str):
-    return text.lower() in ["tldr", "tl;dr", "tl dr", "tl,dr", "tl:dr"]
+    for variant in ["tldr", "tl;dr", "tl dr", "tl,dr", "tl:dr"]:
+        if variant in text.lower():
+            return True
+
 
 def extract_user_features(user: praw.models.Redditor, snapshot_time: datetime):
     """
@@ -113,6 +117,7 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
         features[f"embedding_title_{str(i).zfill(3)}"] = embedding_title[i]
     return pd.DataFrame(features, index=[0])
 
+
 def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: datetime):
     """
     See the reddit docs for subreddits here:
@@ -140,6 +145,7 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
     # - <activity_metric>                                   # e.g. number of posts per day, avg number of comments on posts, etc...
     # - <embedding of the description of the subreddit?>
     return pd.DataFrame(features, index=[0])
+
 
 # NOTE: This method can probably be deleted, as it was created to debug creating the feature groups but did not solve the problem
 def get_column_names(fg_name, non_primary_only=False):
