@@ -56,17 +56,15 @@ def get_full_dataset():
     return df_full
 
 
-def get_model_features():
+def get_model_features(with_validation_set=False):
     try:
         feature_view = fs.get_feature_view(name="reddit_features", version=1)
     except:
         feature_view = create_feature_view()
 
     # TODO: After we have gathered enough data - let all test data come afer date x and the train data / validation data from before
-    
-    # Alternative split with validation set, e.g. for cross validation:
-    # return feature_view.train_validation_test_split(validation_size=0.2, test_size=0.2)
-
+    if with_validation_set:
+        return feature_view.train_validation_test_split(validation_size=0.2, test_size=0.2)
     return feature_view.train_test_split(test_size=0.2)
 
 # TODO: Bin the number of likes into ranges and try to predict the range instead of the exact number
