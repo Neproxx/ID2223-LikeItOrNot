@@ -1,8 +1,12 @@
-# %%
 from transformers import AutoModelForSequenceClassification
 from transformers import AutoTokenizer
 from scipy.special import softmax
 from sentence_transformers import SentenceTransformer
+
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.base import BaseEstimator, TransformerMixin
+import numpy as np
 
 import praw
 import numpy as np
@@ -28,10 +32,13 @@ def get_sentiment(text: str):
         for t in text.split(" "):
             t = 'http' if t.startswith('http') else t
             new_text.append(t)
-        return " ".join(new_text)
+        # Note that Roberta only accepts up to 512 tokens
+        # I have not yet figured out how to select the number of tokens, so below is a quickhack
+        return " ".join(new_text[:256]) # TODO: Select tokens in a from the tokenizer instead
 
     text = preprocess(text)
     encoded_input = sentiment_model["tokenizer"](text, return_tensors='pt')
+    # TODO: Reduce the tokens to 512, but keep in mind that the first and last one are probably special tokens
     output = sentiment_model["model"](**encoded_input)
     scores = output[0][0].detach().numpy()
     return softmax(scores)
@@ -49,6 +56,7 @@ def contains_tldr(text: str):
     for variant in ["tldr", "tl;dr", "tl dr", "tl,dr", "tl:dr"]:
         if variant in text.lower():
             return True
+    return False
 
 
 def extract_user_features(user: praw.models.Redditor, snapshot_time: datetime):
@@ -65,9 +73,14 @@ def extract_user_features(user: praw.models.Redditor, snapshot_time: datetime):
             likes.append(submission.score)
 
     return pd.DataFrame({
+            # ID columns for joins
             "user_id": user.id,
             "snapshot_time": snapshot_time.isoformat(),    # utc Timestamp of when the data was extracted
+            
+            # Meta data (for manual checking - not for model)
             "user_name": user.name,
+
+            # Model features
             "comment_karma": user.comment_karma,
             "link_karma": user.link_karma,
             "is_gold": user.is_gold,                        # Whether the user has premium status
@@ -89,18 +102,24 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
     https://praw.readthedocs.io/en/stable/code_overview/models/submission.html#praw.models.Submission
     """
     sentiment = get_sentiment(post.selftext)
+    has_text = len(post.selftext.strip(" \n")) > 0
     features = {
+            # ID columns for joins
             "post_id": post.id,
             "user_id": post.author.id,
             "subreddit_id": post.subreddit.id,
             "snapshot_time": snapshot_time.isoformat(),
-            "created": post.created_utc,
+
+            # Meta data (for manual checking - not for model)
+            "date_created": post.created_utc,
             "link": post.permalink,
+            "title": post.title,
+            "text": post.selftext if has_text else "",
+
+            # Model features and labels
             "num_likes": post.score,
             "upvote_ratio": post.upvote_ratio,
-            "title": post.title,
-            "text": post.selftext,
-            "text_length": len(post.selftext.split(" ")),
+            "text_length": len(post.selftext.split(" ")) if has_text else 0,
             "sentiment_negative": sentiment[0],
             "sentiment_neutral": sentiment[1],
             "sentiment_positive": sentiment[2],
@@ -109,13 +128,10 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
             "hour_of_day": datetime.fromtimestamp(post.created_utc).hour,
             "day_of_week": datetime.fromtimestamp(post.created_utc).weekday(),
         }
-    embedding_text = get_text_embedding(post.selftext)
-    embedding_title = get_text_embedding(post.title)
-    for i in range(len(embedding_text)):
-        features[f"embedding_text_{str(i).zfill(3)}"] = embedding_text[i]
-    for i in range(len(embedding_title)):
-        features[f"embedding_title_{str(i).zfill(3)}"] = embedding_title[i]
-    return pd.DataFrame(features, index=[0])
+    df_new_post = pd.DataFrame(features, index=[0])
+    df_new_post["embedding_text"] = [get_text_embedding(post.selftext)]
+    df_new_post["embedding_title"] = [get_text_embedding(post.title)]
+    return df_new_post
 
 
 def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: datetime):
@@ -124,9 +140,14 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
     https://praw.readthedocs.io/en/stable/code_overview/models/subreddit.html#praw.models.Subreddit
     """
     features = {
+        # ID columns for joins
         "subreddit_id": subreddit.id,
-        "subreddit_name": subreddit.display_name,
         "snapshot_time": snapshot_time.isoformat(),
+
+        # Meta data (for manual checking - not for model)
+        "subreddit_name": subreddit.display_name,
+
+        # Model features
         "num_subscribers": subreddit.subscribers,
         # ...
     }
@@ -146,29 +167,91 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
     # - <embedding of the description of the subreddit?>
     return pd.DataFrame(features, index=[0])
 
+def get_subreddit_names():
+    """
+    Returns a list of subreddit names to extract data from.
+    """
+    return [
+        # High quality subreddits
+        "explainlikeimfive",
+        "Showerthoughts",
+        "AskReddit",
+        "todayilearned",
+        "AskMen",
+        "AskWomen",
+        "Jokes",
+        "WritingPrompts",
+        "nosleep",
+        "IAmA",
+        "LifeProTips",
 
-# NOTE: This method can probably be deleted, as it was created to debug creating the feature groups but did not solve the problem
-def get_column_names(fg_name, non_primary_only=False):
-    if fg_name == "reddit_posts":
-        cols = (["post_id", "user_id", "subreddit_id", "snapshot_time", "created", "link", "num_likes", "upvote_ratio",
-                 "title", "text", "text_length", "sentiment_negative", "sentiment_neutral", "sentiment_positive",
-                 "contains_tldr", "hour_of_day", "day_of_week"]
-              + [f"embedding_text_{str(i).zfill(3)}" for i in range(384)]
-              + [f"embedding_title_{str(i).zfill(3)}" for i in range(384)]
-            )
+        # More text-based subreddits
+        "Parenting",
+        "legaladvice",
+        "bestoflegaladvice",
+        "TalesFromRetail",
+        "TalesFromYourServer",
+        "IDontWorkHereLady",
+        "TalesFromThePizzaGuy",
+        "HFY",
+        "SubredditSimulator",
+        "javascript",
+        "ChoosingBeggars",
+        "AmItheAsshole",
+        "dating_advice",
+        "askscience",
+        "movies",
+        "technology",
+        ]
 
-    if fg_name == "reddit_users":
-        cols = ["user_id", "snapshot_time", "user_name", "is_gold", "is_mod", "has_verified_email",
-                "account_age", "likes_hist_mean", "likes_hist_stddev", "likes_hist_median",
-                "likes_hist_80th_percentile", "likes_hist_20th_percentile", "num_posts_last_month"]
+        # https://www.reddit.com/r/talesfromtechsupport/
 
-    if fg_name == "reddit_subreddits":
-        # TODO: Add more features
-        cols = ["subreddit_id", "snapshot_time", "subreddit_name", "num_subscribers"]
 
-    if non_primary_only:
-        cols = cols[1:] if fg_name == "reddit_posts" else cols[2:]
+class ColumnExpander(BaseEstimator, TransformerMixin):
+    """
+    Class to expand a column containing arrays as string to multiple columns.
+    Expects the arrays to have length 384 (as returned by the the sentence transformer paraphrase-MiniLM-L6-v2)
+    """
+    def __init__(self, columns=None):
+        self.columns = columns
 
-    print(f"Columns for {fg_name}: {cols}")
+    def fit(self, X, y=None):
+        return self
 
-    return cols
+    def transform(self, X, y=None):
+        assert isinstance(X, pd.DataFrame), "Can only expand columns if X is a pandas dataframe."
+
+        columns = self.columns if self.columns is not None else X.columns
+        for col in columns:
+            # The embedding is stored as string and must be converted back to a numpy array
+            to_array = lambda x: np.fromstring(x.strip("[]"), dtype=float, sep=",")
+            X.loc[:, col] = X[col].apply(to_array)
+
+            # Check if the array has the expected length
+            array_len = len(X[col].values[0])
+            assert array_len == 384, f"Expected arrays in {col} to be an embedding with size 384, but got {array_len} instead."
+            
+            # Expand the column into multiple ones and remove the original column
+            df_expanded = pd.DataFrame(X[col].tolist(),
+                                        index=X.index,
+                                        columns=[f"{col}_{str(i).zfill(3)}" for i in range(384)])
+            X.loc[:, df_expanded.columns] = df_expanded.values
+            X.drop(columns=[col], inplace=True)
+        return X
+
+
+def get_preprocessor(model_type="tree"):
+    """
+    Defines how to process the data before feeding it to a model.
+    """
+    if model_type == "tree":
+        return ColumnTransformer(transformers=[
+                                    ("onehot_encoder", OneHotEncoder(sparse=False, handle_unknown="ignore"),["subreddit_id"]),
+                                    ("column_expander", ColumnExpander(), ["embedding_text", "embedding_title"]),
+                                    ("drop_columns", "drop", ["post_id", "user_id", "snapshot_time"])
+                                    ],
+                       remainder='passthrough',
+                       verbose_feature_names_out=True)
+    else:
+        # NOTE: If using non-tree based models, we need to scale the data
+        raise NotImplementedError(f"Preprocessing data for model type {model_type} is not implemented.")

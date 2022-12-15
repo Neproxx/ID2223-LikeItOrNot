@@ -6,11 +6,9 @@ Scalable machine learning system to predict the number of likes a reddit post or
 
 The feature pipeline is deployed on modal and run on a daily schedule. It scans a set of subreddits for new posts / comments, pre-processes them and adds them to the feature store on hopsworks.
 
-The following subreddits are crawled on a daily basis:
+A long list of subreddits are crawled on a daily basis, these include for example:
 
 - /r/AskReddit
-- /r/todayilearned
-- /r/gaming
 - /r/explainlikeimfive
 - /r/Showerthoughts
 
@@ -24,7 +22,7 @@ The script extracts data for three entity types that are stored in their individ
 - `snapshot_time`: The time when the post was crawled. The same for associated entries in all three tables.
 - `num_likes`: The number of upvotes the post received. This is the <strong>`primary label`</strong> we want to predict.
 - `upvote_ratio`: The ratio of upvotes to downvotes which indicates how controversial a post is. This is a <strong>`secondary label`</strong> we want to predict.
-- `created`: The time when the post was created on reddit.
+- `date_created`: The time when the post was created on reddit.
 - `link`: The URL to the post on reddit.
 - `title`: The title of the post as string.
 - `text`: The text of the post as string.
@@ -35,8 +33,8 @@ The script extracts data for three entity types that are stored in their individ
 - `contains_tldr`: Whether the post contains a "tldr" (too long, didn`t read) section.
 - `hour_of_day`: The hour of the day when the post was created.
 - `day_of_week`: The day of the week when the post was created.
-- `embedding_text_000` to `embedding_text_383`: The 384-dimensional embedding of the text of the post. Obtained with [sentence-transformers/paraphrase-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L6-v2).
-- `embedding_title_000` to `embedding_title_383`: The 384-dimensional embedding of the title of the post. Obtained with [sentence-transformers/paraphrase-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L6-v2).
+- `embedding_text`: The 384-dimensional embedding of the text of the post (taking only the first 512 tokens into account). Obtained with [sentence-transformers/paraphrase-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L6-v2).
+- `embedding_title`: The 384-dimensional embedding of the title of the post (taking only the first 512 tokens into account). Obtained with [sentence-transformers/paraphrase-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L6-v2).
 
 ### reddit_users
 
