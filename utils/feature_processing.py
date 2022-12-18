@@ -38,7 +38,12 @@ def get_sentiment(text: str):
 
     text = preprocess(text)
     encoded_input = sentiment_model["tokenizer"](text, return_tensors='pt')
-    # TODO: Reduce the tokens to 512, but keep in mind that the first and last one are probably special tokens
+
+    # Clip to 512 tokens
+    for key in encoded_input.keys():
+            encoded_input[key] = encoded_input[key][:, :512]
+
+    print(len(encoded_input))
     output = sentiment_model["model"](**encoded_input)
     scores = output[0][0].detach().numpy()
     return softmax(scores)
@@ -102,6 +107,8 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
     https://praw.readthedocs.io/en/stable/code_overview/models/submission.html#praw.models.Submission
     """
     sentiment = get_sentiment(post.selftext)
+    print(post.selftext)
+    print(sentiment)
     has_text = len(post.selftext.strip(" \n")) > 0
     features = {
             # ID columns for joins
@@ -133,12 +140,12 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
     df_new_post["embedding_title"] = [get_text_embedding(post.title)]
     return df_new_post
 
-
 def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: datetime):
     """
     See the reddit docs for subreddits here:
     https://praw.readthedocs.io/en/stable/code_overview/models/subreddit.html#praw.models.Subreddit
     """
+
     features = {
         # ID columns for joins
         "subreddit_id": subreddit.id,
@@ -151,21 +158,42 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
         "num_subscribers": subreddit.subscribers,
         # ...
     }
-    # TODO: Retrieve sample of top posts (e.g. 30) and compute sentiment of top posts
-    # Add features:
-    # - sentiment_negative_mean
-    # - sentiment_negative_stddev
-    # - sentiment_negative_median
-    # - sentiment_neutral_mean
-    # - sentiment_neutral_stddev
-    # - sentiment_neutral_median
-    # - sentiment_positive_mean
-    # - sentiment_positive_stddev
-    # - sentiment_positive_median
-    # - num_users_total
-    # - <activity_metric>                                   # e.g. number of posts per day, avg number of comments on posts, etc...
-    # - <embedding of the description of the subreddit?>
-    return pd.DataFrame(features, index=[0])
+
+    negative_sentiments = []
+    neutral_sentiments = []
+    positive_sentiments = []
+
+    # get sentiment of top posts
+    for post in subreddit.new(limit=30):
+        sentiment = get_sentiment(post.selftext)
+        negative_sentiments.append(sentiment[0])
+        neutral_sentiments.append(sentiment[1])
+        positive_sentiments.append(sentiment[2])
+    
+    # calculate mean, median, and standard deviation of sentiment
+    features["sentiment_negative_mean"] = np.mean(negative_sentiments)
+    features["sentiment_negative_stddev"] = np.std(negative_sentiments)
+    features["sentiment_negative_median"] = np.median(negative_sentiments)
+    features["sentiment_neutral_mean"] = np.mean(neutral_sentiments)
+    features["sentiment_neutral_stddev"] = np.std(neutral_sentiments)
+    features["sentiment_neutral_median"] = np.median(neutral_sentiments)
+    features["sentiment_positive_mean"] = np.mean(positive_sentiments)
+    features["sentiment_positive_stddev"] = np.std(positive_sentiments)
+    features["sentiment_positive_median"] = np.median(positive_sentiments)
+
+    # count posts in the last week
+    number_of_posts = 0
+    for post in subreddit.new(limit=None):
+        number_of_posts += 1
+    features["num_posts_last_week"] = number_of_posts
+
+    # embedding of the description of the subreddit
+
+    df_new_subreddit = pd.DataFrame(features, index=[0])
+
+    df_new_subreddit["embedding_description"] = [get_text_embedding(subreddit.description)]
+
+    return df_new_subreddit
 
 def get_subreddit_names():
     """
