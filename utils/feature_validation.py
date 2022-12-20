@@ -29,10 +29,22 @@ def validate_preprocessor(preprocessor, X, model_type):
     :param X: A pandas dataframe containing the data to be preprocessed.
     :param preprocessor: A preprocessor as returned by get_preprocessor().
     """
-    unprocessed_features = ['text_length', 'sentiment_negative', 'sentiment_neutral', 'sentiment_positive', 'contains_tldr',
-                            'hour_of_day', 'day_of_week', 'comment_karma', 'link_karma', 'is_gold', 'is_mod', 'has_verified_email',
-                            'account_age', 'num_posts_last_month', 'likes_hist_mean', 'likes_hist_stddev', 'likes_hist_median',
-                            'likes_hist_80th_percentile', 'likes_hist_20th_percentile', 'num_subscribers']
+    unprocessed_features = ["text_length", "text_sentiment_negative", "text_sentiment_neutral", "text_sentiment_positive", 
+                            "title_sentiment_negative","title_sentiment_neutral","title_sentiment_positive", "contains_tldr",
+                            "hour_of_day", "day_of_week",
+                            # User features
+                            "comment_karma", "link_karma", "is_gold", "is_mod", "has_verified_email", "account_age",
+                            "num_posts_last_month","likes_hist_mean", "likes_hist_stddev", "likes_hist_median",
+                            "likes_hist_80th_percentile", "likes_hist_20th_percentile", 
+                            # Subreddit features
+                            "subreddit_sentiment_negative_mean", "subreddit_sentiment_negative_stddev", 
+                            "subreddit_sentiment_negative_median", "subreddit_sentiment_negative_80th_percentile",
+                            "subreddit_sentiment_negative_20th_percentile", "subreddit_sentiment_neutral_mean",
+                            "subreddit_sentiment_neutral_stddev", "subreddit_sentiment_neutral_median",
+                            "subreddit_sentiment_neutral_80th_percentile", "subreddit_sentiment_neutral_20th_percentile",
+                            "subreddit_sentiment_positive_mean", "subreddit_sentiment_positive_stddev",
+                            "subreddit_sentiment_positive_median", "subreddit_sentiment_positive_80th_percentile",
+                            "subreddit_sentiment_positive_20th_percentile", "num_subscribers"]
     num_cols_expected = len(unprocessed_features)
     
     # Two embedding columns embedding_text and embedding_title that are expanded to 384 columns each

@@ -11,6 +11,7 @@ import numpy as np
 import praw
 import numpy as np
 import pandas as pd
+from warnings import warn
 from datetime import datetime, timedelta
 
 # Load models for feature pre-processing
@@ -32,16 +33,20 @@ def get_sentiment(text: str):
         for t in text.split(" "):
             t = 'http' if t.startswith('http') else t
             new_text.append(t)
-        # Note that Roberta only accepts up to 512 tokens
-        # I have not yet figured out how to select the number of tokens, so below is a quickhack
-        return " ".join(new_text[:256]) # TODO: Select tokens in a from the tokenizer instead
+        return " ".join(new_text)
 
-    text = preprocess(text)
-    encoded_input = sentiment_model["tokenizer"](text, return_tensors='pt')
-    # TODO: Reduce the tokens to 512, but keep in mind that the first and last one are probably special tokens
-    output = sentiment_model["model"](**encoded_input)
-    scores = output[0][0].detach().numpy()
-    return softmax(scores)
+    try:
+        text = preprocess(text)
+        encoded_input = sentiment_model["tokenizer"](text, return_tensors='pt', max_length=512, truncation=True)
+        output = sentiment_model["model"](**encoded_input)
+        scores = output[0][0].detach().numpy()
+        return softmax(scores)
+    except Exception as e:
+        warn(f"Could not extract sentiment for text with length {len(text.split(' '))} words: {text}")
+        print(e)
+        print("sentiment output:")
+        print(sentiment_model["model"](**encoded_input))
+        return (np.nan, np.nan, np.nan)
 
 
 def get_text_embedding(text: str):
@@ -101,8 +106,9 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
     See the reddit docs for submissions / posts here:
     https://praw.readthedocs.io/en/stable/code_overview/models/submission.html#praw.models.Submission
     """
-    sentiment = get_sentiment(post.selftext)
-    has_text = len(post.selftext.strip(" \n")) > 0
+    sentiment_title = get_sentiment(post.title)
+    sentiment_text = get_sentiment(post.selftext)
+    has_text = len(post.selftext.strip(" \n")) > 0 if post.selftext else False
     features = {
             # ID columns for joins
             "post_id": post.id,
@@ -120,10 +126,12 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
             "num_likes": post.score,
             "upvote_ratio": post.upvote_ratio,
             "text_length": len(post.selftext.split(" ")) if has_text else 0,
-            "sentiment_negative": sentiment[0],
-            "sentiment_neutral": sentiment[1],
-            "sentiment_positive": sentiment[2],
-            #"topic": classify_topic(post.text),                                 # TODO: Check if usable: https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english?text=I+like+you.+I+love+you+yoyo#how-to-get-started-with-the-model
+            "test_sentiment_negative": sentiment_text[0],
+            "test_sentiment_neutral": sentiment_text[1],
+            "test_sentiment_positive": sentiment_text[2],
+            "title_sentiment_negative": sentiment_title[0],
+            "title_sentiment_neutral": sentiment_title[1],
+            "title_sentiment_positive": sentiment_title[2],
             "contains_tldr": contains_tldr(post.selftext),
             "hour_of_day": datetime.fromtimestamp(post.created_utc).hour,
             "day_of_week": datetime.fromtimestamp(post.created_utc).weekday(),
@@ -139,6 +147,18 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
     See the reddit docs for subreddits here:
     https://praw.readthedocs.io/en/stable/code_overview/models/subreddit.html#praw.models.Subreddit
     """
+
+    negative_sentiments = []
+    neutral_sentiments = []
+    positive_sentiments = []
+
+    # Compute distribution of sentiments of top posts in the last week
+    for post in subreddit.top(limit=50, time_filter="week"):
+        sentiment = get_sentiment(post.selftext)
+        negative_sentiments.append(sentiment[0])
+        neutral_sentiments.append(sentiment[1])
+        positive_sentiments.append(sentiment[2])
+
     features = {
         # ID columns for joins
         "subreddit_id": subreddit.id,
@@ -149,29 +169,34 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
 
         # Model features
         "num_subscribers": subreddit.subscribers,
-        # ...
+        "subreddit_sentiment_negative_mean": np.mean(negative_sentiments),
+        "subreddit_sentiment_negative_stddev": np.std(negative_sentiments),
+        "subreddit_sentiment_negative_median": np.median(negative_sentiments),
+        "subreddit_sentiment_negative_80th_percentile": np.percentile(negative_sentiments, 80),
+        "subreddit_sentiment_negative_20th_percentile": np.percentile(negative_sentiments, 20),
+        "subreddit_sentiment_neutral_mean": np.mean(neutral_sentiments),
+        "subreddit_sentiment_neutral_stddev": np.std(neutral_sentiments),
+        "subreddit_sentiment_neutral_median": np.median(neutral_sentiments),
+        "subreddit_sentiment_neutral_80th_percentile": np.percentile(neutral_sentiments, 80),
+        "subreddit_sentiment_neutral_20th_percentile": np.percentile(neutral_sentiments, 20),
+        "subreddit_sentiment_positive_mean": np.mean(positive_sentiments),
+        "subreddit_sentiment_positive_stddev": np.std(positive_sentiments),
+        "subreddit_sentiment_positive_median": np.median(positive_sentiments),
+        "subreddit_sentiment_positive_80th_percentile": np.percentile(positive_sentiments, 80),
+        "subreddit_sentiment_positive_20th_percentile": np.percentile(positive_sentiments, 20),
     }
-    # TODO: Retrieve sample of top posts (e.g. 30) and compute sentiment of top posts
-    # Add features:
-    # - sentiment_negative_mean
-    # - sentiment_negative_stddev
-    # - sentiment_negative_median
-    # - sentiment_neutral_mean
-    # - sentiment_neutral_stddev
-    # - sentiment_neutral_median
-    # - sentiment_positive_mean
-    # - sentiment_positive_stddev
-    # - sentiment_positive_median
-    # - num_users_total
-    # - <activity_metric>                                   # e.g. number of posts per day, avg number of comments on posts, etc...
-    # - <embedding of the description of the subreddit?>
-    return pd.DataFrame(features, index=[0])
 
-def get_subreddit_names():
+    # Embedding of the description of the subreddit
+    df_new_subreddit = pd.DataFrame(features, index=[0])
+    df_new_subreddit["embedding_description"] = [get_text_embedding(subreddit.description)]
+    
+    return df_new_subreddit
+
+def get_subreddit_names(n_subreddits=10, shuffle=False):
     """
     Returns a list of subreddit names to extract data from.
     """
-    return [
+    subreddits = [
         # High quality subreddits
         "explainlikeimfive",
         "Showerthoughts",
@@ -203,14 +228,15 @@ def get_subreddit_names():
         "movies",
         "technology",
         ]
-
-        # https://www.reddit.com/r/talesfromtechsupport/
+    if shuffle:
+        np.random.shuffle(subreddits)
+    return subreddits[:n_subreddits]
 
 
 class ColumnExpander(BaseEstimator, TransformerMixin):
     """
-    Class to expand a column containing arrays as string to multiple columns.
-    Expects the arrays to have length 384 (as returned by the the sentence transformer paraphrase-MiniLM-L6-v2)
+    Class to expand a column containing arrays (as string) to multiple columns.
+    Expects the arrays to have length 384 (as returned by the sentence transformer paraphrase-MiniLM-L6-v2)
     """
     def __init__(self, columns=None):
         self.columns = columns

@@ -9,3 +9,5 @@ xgboost
 joblib
 scikit-learn
 python-dotenv
+seaborn
+matplotlib

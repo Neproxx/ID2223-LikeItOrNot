@@ -1,11 +1,12 @@
-RUN_ON_MODAL=False
+RUN_ON_MODAL=True
 
 # Specify maximum time to crawl in seconds. Modal will have a timeout threshold of MAX_CRAWL_TIME + 15 minutes
 # The additional 15 minutes are to allow for the pipeline to finish and upload everything.
-MAX_CRAWL_TIME = 30*60
+MAX_CRAWL_TIME = 100*60
 
 def g():
     import os
+    import numpy as np
     import pandas as pd
     import praw
     import hopsworks
@@ -52,7 +53,7 @@ def g():
 
     def should_process_post(post: praw.models.Submission, processed_post_ids: set):
         """
-        Filters out posts that would be bad samples and should be skipped.
+        Returns False for posts that would be bad samples and should be skipped.
         For example media posts do not make sense for this service or posts that are already processed.
         """
         # Fiter out posts that are younger than 48 hours, as we assume that
@@ -83,22 +84,35 @@ def g():
         :param deadline: Time after which the function should stop processing and upload the data to Hopsworks.
                          Otherwise, modal may throw a timeout error.
         """
-        max_posts_per_subreddit = 15
+        max_posts_per_subreddit = 60
         df_posts = pd.DataFrame()
         df_users = pd.DataFrame()
         df_subreddits = pd.DataFrame()
         processed_user_ids = set()
 
-        subreddit_list = get_subreddit_names()
+        # As we cannot crawl all posts from all subreddits, we choose five random subreddits
+        # from which we crawl a mixture of new, top and controversial posts from the last week.
+        # To this, we add random posts from the subreddit (as we cannot filter them with time).
+        # We crawl more "new" posts (the newest posts that are at least 48 hours old) than others,
+        # as we believe it is a better statistical sample as opposed to e.g. only crawling top posts.
+        subreddit_list = get_subreddit_names(n_subreddits=10, shuffle=True)
         for subreddit_name in subreddit_list:
-            # TODO: Improve how we select posts to get a representative sample of good and bad posts
-            # Round robin approach to sample posts from multiple subreddits?
-            posts = [p for p in reddit.subreddit(subreddit_name).top("week", limit=1000)]
+            subreddit = reddit.subreddit(subreddit_name)
             snapshot_time = datetime.utcnow()
 
-            new_subreddits = extract_subreddit_features(reddit.subreddit(subreddit_name), snapshot_time)
+            # Combine different types of posts to crawl
+            # 50% new, 30% top, 15% controversial, 5% random
+            posts = []
+            posts.extend([p for p in subreddit.new(limit=500)])
+            posts.extend([p for p in subreddit.top(time_filter="week", limit=300)])
+            posts.extend([p for p in subreddit.controversial(time_filter="week", limit=150)])
+            posts.extend([subreddit.random() for _ in range(50)])
+            np.random.shuffle(posts)
+
+            new_subreddits = extract_subreddit_features(subreddit, snapshot_time)
             df_subreddits = pd.concat([df_subreddits, new_subreddits], ignore_index=True)
 
+            # Crawl the posts and extract their features until the max number of posts per subreddit is reached
             posts_cnt = 0
             for post in tqdm(posts):
                 if should_process_post(post, processed_post_ids):
@@ -125,6 +139,7 @@ def g():
                 warn("Timelimit reached, stopping sample extraction.")
                 break
 
+        print(f"In total, extracted {len(df_posts)} posts, {len(df_users)} users and {len(df_subreddits)} subreddits.")
         inconsistencies = validate_samples(df_users, df_posts, df_subreddits)
         return df_posts, df_users, df_subreddits, inconsistencies
 
@@ -189,7 +204,7 @@ image = modal.Image.debian_slim().pip_install(["hopsworks","joblib","praw","tran
                secret=modal.Secret.from_name("reddit-predict"),
                mounts=[modal.Mount(remote_dir="/root/utils", local_dir="./utils")],
                timeout=MAX_CRAWL_TIME+900,
-               # retries=3
+               retries=2
                )
 def f():
     g()

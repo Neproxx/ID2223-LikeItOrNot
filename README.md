@@ -27,9 +27,12 @@ The script extracts data for three entity types that are stored in their individ
 - `title`: The title of the post as string.
 - `text`: The text of the post as string.
 - `text_length`: The length of the text of the post in number of tokens (that correspond to words most of the time).
-- `sentiment_negative`: The negative sentiment of the post as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
-- `sentiment_neutral`: The neutral sentiment of the post as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
-- `sentiment_positive`: The positive sentiment of the post as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
+- `text_sentiment_negative`: The negative sentiment of the post text as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
+- `text_sentiment_neutral`: The neutral sentiment of the post text as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
+- `text_sentiment_positive`: The positive sentiment of the post text as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
+- `title_sentiment_negative`: The positive sentiment of the post title as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
+- `title_sentiment_neutral`: The positive sentiment of the post title as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
+- `title_sentiment_positive`: The positive sentiment of the post title as float in the range [0, 1]. Obtained with [cardiffnlp/twitter-roberta-base-sentiment-latest](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest).
 - `contains_tldr`: Whether the post contains a "tldr" (too long, didn`t read) section.
 - `hour_of_day`: The hour of the day when the post was created.
 - `day_of_week`: The day of the week when the post was created.
@@ -103,7 +106,7 @@ Secondly, this repository contains a Dockerfile to build a container for this to
 docker compose run reddit-predict
 ```
 
-In case you want to run the script on `modal`, execute the following commands after you started the container and follow the instructions. It will generate a new token that the container needs to authenticate itself to modal. Also, do not forget to set `LOCAL=True`.
+In case you want to run the script on `modal`, execute the following commands after you started the container and follow the instructions. It will generate a new token that the container needs to authenticate itself to modal. Also, do not forget to set `RUN_ON_MODAL=True`.
 
 ```console
 modal token new
