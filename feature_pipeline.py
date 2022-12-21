@@ -10,6 +10,7 @@ def g():
     import pandas as pd
     import praw
     import hopsworks
+    import traceback
     from datetime import datetime, timedelta
     from warnings import warn
     from tqdm import tqdm
@@ -58,6 +59,8 @@ def g():
         """
         # Fiter out posts that are younger than 48 hours, as we assume that
         # the number of like to have converged after that time
+        if post is None or post.created_utc is None:
+            return False
         post_age = datetime.utcnow() - datetime.fromtimestamp(post.created_utc)
         if post_age < timedelta(days=2):
             #print("Skipping post because it is too young: " + post.id + " " + post.title + " " + post.url)
@@ -95,7 +98,7 @@ def g():
         # To this, we add random posts from the subreddit (as we cannot filter them with time).
         # We crawl more "new" posts (the newest posts that are at least 48 hours old) than others,
         # as we believe it is a better statistical sample as opposed to e.g. only crawling top posts.
-        subreddit_list = get_subreddit_names(n_subreddits=10, shuffle=True)
+        subreddit_list = get_subreddit_names(n_subreddits=10, random=True)
         for subreddit_name in subreddit_list:
             subreddit = reddit.subreddit(subreddit_name)
             snapshot_time = datetime.utcnow()
@@ -129,6 +132,7 @@ def g():
                     except Exception as e:
                         print("Failed to process post: " + post.id + " " + post.title + " " + post.url)
                         print(e)
+                        traceback.print_exc()
 
                 if is_time_over(deadline) or posts_cnt==max_posts_per_subreddit:
                     break

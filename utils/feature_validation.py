@@ -47,8 +47,9 @@ def validate_preprocessor(preprocessor, X, model_type):
                             "subreddit_sentiment_positive_20th_percentile", "num_subscribers"]
     num_cols_expected = len(unprocessed_features)
     
-    # Two embedding columns embedding_text and embedding_title that are expanded to 384 columns each
-    num_cols_expected += 2*384
+    # Three embedding columns embedding_text and embedding_title and embedding_description
+    # that are expanded to 384 columns each
+    num_cols_expected += 3*384
 
     # subreddit_id is one-hot encoded
     num_cols_expected += len(X["subreddit_id"].unique())

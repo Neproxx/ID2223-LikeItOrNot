@@ -76,29 +76,35 @@ def extract_user_features(user: praw.models.Redditor, snapshot_time: datetime):
         submission_age = snapshot_time - datetime.fromtimestamp(submission.created_utc)
         if submission_age < timedelta(days=30):
             likes.append(submission.score)
+    # If there are no historic likes, use -999 as placeholder for the statistical features,
+    # as this value is outside the range of possible values.
+    has_post_history = len(likes) > 0
+    try:
+        return pd.DataFrame({
+                # ID columns for joins
+                "user_id": user.id,
+                "snapshot_time": snapshot_time.isoformat(),    # utc Timestamp of when the data was extracted
+                
+                # Meta data (for manual checking - not for model)
+                "user_name": user.name,
 
-    return pd.DataFrame({
-            # ID columns for joins
-            "user_id": user.id,
-            "snapshot_time": snapshot_time.isoformat(),    # utc Timestamp of when the data was extracted
-            
-            # Meta data (for manual checking - not for model)
-            "user_name": user.name,
-
-            # Model features
-            "comment_karma": user.comment_karma,
-            "link_karma": user.link_karma,
-            "is_gold": user.is_gold,                        # Whether the user has premium status
-            "is_mod": user.is_mod,                          # Whether the user is a moderator of ANY subreddit
-            "has_verified_email": user.has_verified_email,
-            "account_age": (snapshot_time - datetime.fromtimestamp(user.created_utc)).days,
-            "num_posts_last_month": len(likes),
-            "likes_hist_mean": np.mean(likes),
-            "likes_hist_stddev": np.std(likes),
-            "likes_hist_median": np.median(likes),
-            "likes_hist_80th_percentile": np.percentile(likes, 80),
-            "likes_hist_20th_percentile": np.percentile(likes, 20),
-        }, index=[0])
+                # Model features
+                "comment_karma": user.comment_karma,
+                "link_karma": user.link_karma,
+                "is_gold": user.is_gold,                        # Whether the user has premium status
+                "is_mod": user.is_mod,                          # Whether the user is a moderator of ANY subreddit
+                "has_verified_email": user.has_verified_email,
+                "account_age": (snapshot_time - datetime.fromtimestamp(user.created_utc)).days,
+                "num_posts_last_month": len(likes),
+                "likes_hist_mean": np.mean(likes) if has_post_history else -999,
+                "likes_hist_stddev": np.std(likes) if has_post_history else -999,
+                "likes_hist_median": np.median(likes) if has_post_history else -999,
+                "likes_hist_80th_percentile": np.percentile(likes, 80) if has_post_history else -999,
+                "likes_hist_20th_percentile": np.percentile(likes, 20) if has_post_history else -999,
+            }, index=[0])
+    except Exception as e:
+        warn(f"Could not extract user features for user {user.name}")
+        raise e
 
 
 def extract_post_features(post: praw.models.Submission, snapshot_time: datetime):
@@ -192,7 +198,7 @@ def extract_subreddit_features(subreddit: praw.models.Subreddit, snapshot_time: 
     
     return df_new_subreddit
 
-def get_subreddit_names(n_subreddits=10, shuffle=False):
+def get_subreddit_names(n_subreddits=10, random=False):
     """
     Returns a list of subreddit names to extract data from.
     """
@@ -228,7 +234,7 @@ def get_subreddit_names(n_subreddits=10, shuffle=False):
         "movies",
         "technology",
         ]
-    if shuffle:
+    if random:
         np.random.shuffle(subreddits)
     return subreddits[:n_subreddits]
 
@@ -273,7 +279,7 @@ def get_preprocessor(model_type="tree"):
     if model_type == "tree":
         return ColumnTransformer(transformers=[
                                     ("onehot_encoder", OneHotEncoder(sparse=False, handle_unknown="ignore"),["subreddit_id"]),
-                                    ("column_expander", ColumnExpander(), ["embedding_text", "embedding_title"]),
+                                    ("column_expander", ColumnExpander(), ["embedding_text", "embedding_title", "embedding_description"]),
                                     ("drop_columns", "drop", ["post_id", "user_id", "snapshot_time"])
                                     ],
                        remainder='passthrough',

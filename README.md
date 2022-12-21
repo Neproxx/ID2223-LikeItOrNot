@@ -51,11 +51,11 @@ The script extracts data for three entity types that are stored in their individ
 - `has_verified_email`: Whether the user has verified their email address.
 - `account_age`: The age of the account in days.
 - `num_posts_last_month`: The number of posts the user created in the last month (we chose 50 to be the max).
-- `likes_hist_mean`: The mean of the number of likes the user received for their posts in the last month.
-- `likes_hist_stddev`: The standard deviation of the number of likes the user received for their posts in the last month.
-- `likes_hist_median`: The median of the number of likes the user received for their posts in the last month.
-- `likes_hist_80th_percentile`: The 80th percentile of the number of likes the user received for their posts in the last month.
-- `likes_hist_20th_percentile`: The 20th percentile of the number of likes the user received for their posts in the last month.
+- `likes_hist_mean`: The mean of the number of likes the user received for their posts in the last month. Placeholder value of -999 if no posts exist in that period.
+- `likes_hist_stddev`: The standard deviation of the number of likes the user received for their posts in the last month. Placeholder value of -999 if no posts exist in that period.
+- `likes_hist_median`: The median of the number of likes the user received for their posts in the last month. Placeholder value of -999 if no posts exist in that period.
+- `likes_hist_80th_percentile`: The 80th percentile of the number of likes the user received for their posts in the last month. Placeholder value of -999 if no posts exist in that period.
+- `likes_hist_20th_percentile`: The 20th percentile of the number of likes the user received for their posts in the last month. Placeholder value of -999 if no posts exist in that period.
 
 ### reddit_subreddits
 
@@ -72,12 +72,7 @@ The script extracts data for three entity types that are stored in their individ
 - `sentiment_positive_mean`: The mean of the positive sentiment of the most recent top posts in the subreddit.
 - `sentiment_positive_stddev`: The standard deviation of the positive sentiment of the most recent top posts in the subreddit.
 - `sentiment_positive_median`: The median of the positive sentiment of the most recent top posts in the subreddit.
-
-### Yet to be further defined and implemented:
-
-- `<subreddit_activity_metric>`: The activity metric of the subreddit, e.g. the number of posts created in the subreddit per day.
-- `<subreddit_description_embedding>`: The embedding of the description of the subreddit. Obtained with sentence-transformers/paraphrase-MiniLM-L6-v2.
-- `<post_topic_classification>`: Topic of the post as obtained with [distilbert-base-uncased-finetuned-sst-2-english](https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english?text=I+like+you.+I+love+you+yoyo#how-to-get-started-with-the-model)
+- `embedding_description`: The embedding of the description of the subreddit. Obtained with [sentence-transformers/paraphrase-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L6-v2).
 
 ## Training Pipeline
 

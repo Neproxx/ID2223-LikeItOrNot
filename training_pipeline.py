@@ -1,3 +1,4 @@
+import os
 import xgboost
 import hopsworks
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -5,6 +6,8 @@ from sklearn.pipeline import Pipeline
 from utils.feature_processing import get_preprocessor
 from utils.feature_validation import validate_preprocessor
 from dotenv import load_dotenv
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # TODO: Make script executable on Modal
 load_dotenv()
@@ -56,19 +59,23 @@ def get_full_dataset():
     return df_full
 
 
-def get_model_features(with_validation_set=False):
+def get_model_features(with_validation_set=False, version=None):
     try:
         feature_view = fs.get_feature_view(name="reddit_features", version=1)
-    except:
+    except Exception as e:
         feature_view = create_feature_view()
 
     # TODO: After we have gathered enough data - let all test data come afer date x and the train data / validation data from before
-    if with_validation_set:
+    if with_validation_set and version is not None:
+        return feature_view.get_train_validation_test_splits(training_dataset_version=version)
+    elif with_validation_set:
         return feature_view.train_validation_test_split(validation_size=0.2, test_size=0.2)
+    elif not with_validation_set and version is not None:
+        return feature_view.get_train_test_split(training_dataset_version=version)
     return feature_view.train_test_split(test_size=0.2)
 
 # TODO: Bin the number of likes into ranges and try to predict the range instead of the exact number
-X_train, X_test, y_train, y_test = get_model_features()
+X_train, X_test, y_train, y_test = get_model_features(version=6)
 model = Pipeline(steps=[
                     ("preprocessor", get_preprocessor("tree")),
                     ("model", xgboost.XGBRegressor())
@@ -92,5 +99,21 @@ print(f"MSE {t2_label}: %.2f" % mse[1])
 print(f"MAE {t2_label}: %.2f" % mae[1])
 print(f"R2 {t2_label}: %.2f" % r2[1])
 
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+sns.scatterplot(x=y_test["num_likes"], y=y_pred[:,0], ax=ax1)
+sns.scatterplot(x=y_test["upvote_ratio"], y=y_pred[:,1], ax=ax2)
+ax1.set_title("Predicted vs actual number of likes")
+ax2.set_title("Predicted vs actual upvote ratio")
+ax1.set_xlabel("Actual number of likes")
+ax1.set_ylabel("Predicted number of likes")
+ax2.set_xlabel("Actual upvote ratio")
+ax2.set_ylabel("Predicted upvote ratio")
+sns.kdeplot(x=y_test["num_likes"], y=y_pred[:,0], color='blue', ax=ax1)
+sns.kdeplot(x=y_test["upvote_ratio"], y=y_pred[:,1], color='blue', ax=ax2)
+
+if not os.path.exists("results"):
+    os.makedirs("results")
+fig.savefig("results/prediction_error.png")
+
+
 # TODO: Define and upload model together with the fitted preprocessor
-# %%
