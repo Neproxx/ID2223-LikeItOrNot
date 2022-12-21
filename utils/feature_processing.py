@@ -82,18 +82,18 @@ def extract_user_features(user: praw.models.Redditor, snapshot_time: datetime):
     try:
         return pd.DataFrame({
                 # ID columns for joins
-                "user_id": user.id,
+                "user_id": user.id if user.id else "unknown_user_id",
                 "snapshot_time": snapshot_time.isoformat(),    # utc Timestamp of when the data was extracted
                 
                 # Meta data (for manual checking - not for model)
-                "user_name": user.name,
+                "user_name": user.name if user.name else "unknown_user_name",
 
                 # Model features
-                "comment_karma": user.comment_karma,
-                "link_karma": user.link_karma,
-                "is_gold": user.is_gold,                        # Whether the user has premium status
-                "is_mod": user.is_mod,                          # Whether the user is a moderator of ANY subreddit
-                "has_verified_email": user.has_verified_email,
+                "comment_karma": user.comment_karma if user.comment_karma else 0,
+                "link_karma": user.link_karma if user.link_karma else 0,
+                "is_gold": user.is_gold if user.is_gold else False,
+                "is_mod": user.is_mod if user.is_mod else False,
+                "has_verified_email": user.has_verified_email if user.has_verified_email else False,
                 "account_age": (snapshot_time - datetime.fromtimestamp(user.created_utc)).days,
                 "num_posts_last_month": len(likes),
                 "likes_hist_mean": np.mean(likes) if has_post_history else -999,
@@ -117,15 +117,15 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
     has_text = len(post.selftext.strip(" \n")) > 0 if post.selftext else False
     features = {
             # ID columns for joins
-            "post_id": post.id,
-            "user_id": post.author.id,
-            "subreddit_id": post.subreddit.id,
+            "post_id": post.id if post.id else "unknown_post_id",
+            "user_id": post.author.id if post.author.id else "unknown_user_id",
+            "subreddit_id": post.subreddit.id if post.subreddit.id else "unknown_subreddit_id",
             "snapshot_time": snapshot_time.isoformat(),
 
             # Meta data (for manual checking - not for model)
-            "date_created": post.created_utc,
-            "link": post.permalink,
-            "title": post.title,
+            "date_created": post.created_utc if post.created_utc else "unknown_date_created",
+            "link": post.permalink if post.permalink else "unknown_permalink",
+            "title": post.title if post.title else "",
             "text": post.selftext if has_text else "",
 
             # Model features and labels

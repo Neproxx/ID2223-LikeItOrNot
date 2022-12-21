@@ -59,7 +59,10 @@ def g():
         """
         # Fiter out posts that are younger than 48 hours, as we assume that
         # the number of like to have converged after that time
-        if post is None or post.created_utc is None:
+        if (post is None or post.created_utc is None or post.id is None or
+            post.title is None or post.selftext is None or post.author is None or
+            not hasattr(post.author, "id") or post.author.id is None or post.subreddit is None or
+            post.subreddit.id is None or post.upvote_ratio is None or post.score is None):
             return False
         post_age = datetime.utcnow() - datetime.fromtimestamp(post.created_utc)
         if post_age < timedelta(days=2):

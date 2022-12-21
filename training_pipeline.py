@@ -86,6 +86,10 @@ validate_preprocessor(model.named_steps["preprocessor"], X_train, "tree")
 model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 
+# Upvote ratio can only be in interval [0,1]
+upvote_ratio_idx = y_test.columns.get_loc("upvote_ratio")
+y_pred[upvote_ratio_idx] = y_pred[upvote_ratio_idx].clip(0, 1)
+
 mse = mean_squared_error(y_test, y_pred, multioutput="raw_values")
 mae = mean_absolute_error(y_test, y_pred, multioutput="raw_values")
 r2 = r2_score(y_test, y_pred, multioutput="raw_values")
@@ -108,8 +112,21 @@ ax1.set_xlabel("Actual number of likes")
 ax1.set_ylabel("Predicted number of likes")
 ax2.set_xlabel("Actual upvote ratio")
 ax2.set_ylabel("Predicted upvote ratio")
+ax1.set_xscale("log")
+ax1.set_yscale("log")
 sns.kdeplot(x=y_test["num_likes"], y=y_pred[:,0], color='blue', ax=ax1)
 sns.kdeplot(x=y_test["upvote_ratio"], y=y_pred[:,1], color='blue', ax=ax2)
+
+# Draw line to indicate perfect prediction
+min_likes = min(y_test["num_likes"].min(), y_pred[:,0].min())
+max_likes = min(y_test["num_likes"].max(), y_pred[:,0].max())
+min_ratio = min(y_test["upvote_ratio"].min(), y_pred[:,1].min())
+max_ratio = max(y_test["upvote_ratio"].max(), y_pred[:,1].max())
+
+ax1.plot([min_likes, max_likes], [min_likes, max_likes], color='green')
+ax2.plot([min_ratio, max_ratio], [min_ratio, max_ratio], color='green')
+
+
 
 if not os.path.exists("results"):
     os.makedirs("results")
