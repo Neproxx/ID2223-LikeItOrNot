@@ -132,9 +132,9 @@ def extract_post_features(post: praw.models.Submission, snapshot_time: datetime)
             "num_likes": post.score,
             "upvote_ratio": post.upvote_ratio,
             "text_length": len(post.selftext.split(" ")) if has_text else 0,
-            "test_sentiment_negative": sentiment_text[0],
-            "test_sentiment_neutral": sentiment_text[1],
-            "test_sentiment_positive": sentiment_text[2],
+            "text_sentiment_negative": sentiment_text[0],
+            "text_sentiment_neutral": sentiment_text[1],
+            "text_sentiment_positive": sentiment_text[2],
             "title_sentiment_negative": sentiment_title[0],
             "title_sentiment_neutral": sentiment_title[1],
             "title_sentiment_positive": sentiment_title[2],
@@ -232,7 +232,6 @@ def get_subreddit_names(n_subreddits=10, random=False):
         "dating_advice",
         "askscience",
         "movies",
-        "technology",
         ]
     if random:
         np.random.shuffle(subreddits)

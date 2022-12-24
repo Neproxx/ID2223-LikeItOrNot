@@ -84,7 +84,7 @@ An interactive UI allows the user to enter the content of his/her post or commen
 
 ## MLOps
 
-At various steps along the feature and training pipelines, we add automated tests to detect problems like model drift or feature drift.
+At the end of the feature pipeline, the extracted data is tested against a set of expectation rules using the `Great Expectations` framework. Such tests include for example whether the text embeddings consist of arrays of length 384 or if all columns have the correct data type. That way, we can be confident that the newly added data has sufficient quality. In Hopsworks it is possible to activate alerts that trigger on validation events. Alternatively, the user can always view the results in the Hopsworks UI for the feature groups.
 
 ## Running the script
 
@@ -94,6 +94,12 @@ Firstly, if you want to run the scripts locally, make sure to have created a .en
 - `REDDIT_CLIENT_SECRET`
 - `REDDIT_CLIENT_ID`
 - `REDDIT_USER_AGENT`
+
+Optionally, you can add the following environment variables to indicate the version of the feature group to use:
+- `POSTS_FG_VERSION`
+- `USERS_FG_VERSION`
+- `SUBREDDITS_FG_VERSION`
+- `FEATURE_VIEW_VERSION`
 
 Secondly, this repository contains a Dockerfile to build a container for this tool that runs in any local environment. In order to use it, simply run the below command which builds the container, starts it and provides you with a terminal inside the container where you can run the scripts from. In case of development, you can modify files locally and the changes will come into effect inside the container immediately. Note that building the container can take up to 15 minutes due to the large requirements.
 

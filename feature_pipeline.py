@@ -15,7 +15,7 @@ def g():
     from warnings import warn
     from tqdm import tqdm
     from utils.feature_processing import extract_post_features, extract_user_features, extract_subreddit_features, get_subreddit_names
-    from utils.feature_validation import validate_samples, problems_found
+    from utils.feature_validation import get_expectation_suites
 
     def upload_to_hopsworks(df_insert, feature_group, primary_key, name):
         """
@@ -59,11 +59,13 @@ def g():
         """
         # Fiter out posts that are younger than 48 hours, as we assume that
         # the number of like to have converged after that time
+        try:
         if (post is None or post.created_utc is None or post.id is None or
             post.title is None or post.selftext is None or post.author is None or
             not hasattr(post.author, "id") or post.author.id is None or post.subreddit is None or
             post.subreddit.id is None or post.upvote_ratio is None or post.score is None):
             return False
+       
         post_age = datetime.utcnow() - datetime.fromtimestamp(post.created_utc)
         if post_age < timedelta(days=2):
             #print("Skipping post because it is too young: " + post.id + " " + post.title + " " + post.url)
@@ -82,6 +84,16 @@ def g():
             #print("Skipping post because author is deleted: " + post.id + " " + post.title + " " + post.url)
             return False
         return True
+
+        # Sometimes the post was deleted and we get a 404 error
+        except Exception as e:
+            try:
+                print("Skipping post because of error: " + post.url)
+            except:
+                print("Skipping post the url of which could not be retrieved.")
+            print(e)
+            traceback.print_exc()
+            return False
 
 
     def extract_samples(processed_post_ids: set, deadline: datetime):
@@ -147,36 +159,15 @@ def g():
                 break
 
         print(f"In total, extracted {len(df_posts)} posts, {len(df_users)} users and {len(df_subreddits)} subreddits.")
-        inconsistencies = validate_samples(df_users, df_posts, df_subreddits)
-        return df_posts, df_users, df_subreddits, inconsistencies
+        return df_posts, df_users, df_subreddits
 
     deadline = datetime.utcnow() + timedelta(seconds=MAX_CRAWL_TIME)
     project = hopsworks.login()
     fs = project.get_feature_store()
 
-    # NOTE:
-    # Users and subreddits may be crawled several times, therefore the primary key
-    # needs to include the snapshot time that connects them to the associated posts
-    posts_fg = fs.get_or_create_feature_group(
-        name="reddit_posts",
-        version=1,
-        primary_key=["post_id"],
-        description="User posts crawled from Reddit")
-
-    users_fg = fs.get_or_create_feature_group(
-        name="reddit_users",
-        version=1,
-        primary_key=["user_id", "snapshot_time"],
-        description="User profiles crawled from Reddit")
-
-    subreddits_fg = fs.get_or_create_feature_group(
-        name="reddit_subreddits",
-        version=1,
-        primary_key=["subreddit_id", "snapshot_time"],
-        description="Subreddit information crawled from Reddit")
-
     # Retrieve ids of posts that have already been processed
     try:
+        posts_fg = fs.get_feature_group("reddit_posts", version=os.getenv("POSTS_FG_VERSION", default=1))
         df_posts_hopsworks = posts_fg.select(features=["post_id"]).read()
         processed_post_ids = set(df_posts_hopsworks["post_id"].values.tolist())
     except:
@@ -187,10 +178,37 @@ def g():
         client_id=os.environ["REDDIT_CLIENT_ID"],
         client_secret=os.environ["REDDIT_CLIENT_SECRET"],
     )
-    df_posts, df_users, df_subreddits, inconsistencies = extract_samples(processed_post_ids, deadline)
+    df_posts, df_users, df_subreddits = extract_samples(processed_post_ids, deadline)
 
-    if problems_found(inconsistencies):
-        warn("Consistency problems have been found when extracting new samples: " + str(inconsistencies))
+    # NOTE:
+    # Users and subreddits may be crawled several times, therefore the primary key
+    # needs to include the snapshot time that connects them to the associated posts
+    expectation_suites = get_expectation_suites(df_posts, df_users, df_subreddits)
+    posts_fg = fs.get_or_create_feature_group(
+        name="reddit_posts",
+        version=os.getenv("POSTS_FG_VERSION", default=1),
+        primary_key=["post_id"],
+        description="User posts crawled from Reddit",
+        expectation_suite=expectation_suites["posts"])
+
+    users_fg = fs.get_or_create_feature_group(
+        name="reddit_users",
+        version=os.getenv("USERS_FG_VERSION", default=1),
+        primary_key=["user_id", "snapshot_time"],
+        description="User profiles crawled from Reddit",
+        expectation_suite=expectation_suites["users"])
+
+    subreddits_fg = fs.get_or_create_feature_group(
+        name="reddit_subreddits",
+        version=os.getenv("SUBREDDITS_FG_VERSION", default=1),
+        primary_key=["subreddit_id", "snapshot_time"],
+        description="Subreddit information crawled from Reddit",
+        expectation_suite=expectation_suites["subreddits"])
+
+    # Use this code in case the expectation suites have to be added in hindsight
+    posts_fg.save_expectation_suite(expectation_suites["posts"], validation_ingestion_policy="ALWAYS")
+    users_fg.save_expectation_suite(expectation_suites["users"], validation_ingestion_policy="ALWAYS")
+    subreddits_fg.save_expectation_suite(expectation_suites["subreddits"], validation_ingestion_policy="ALWAYS")
 
     print("Inserting new samples into feature store")
     upload_to_hopsworks(df_posts, posts_fg, primary_key=["post_id"], name="reddit_posts")

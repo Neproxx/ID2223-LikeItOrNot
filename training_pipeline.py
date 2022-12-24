@@ -15,9 +15,9 @@ project = hopsworks.login()
 fs = project.get_feature_store()
 
 def create_feature_view():
-    posts_fg = fs.get_feature_group("reddit_posts", version=1)
-    users_fg = fs.get_feature_group("reddit_users", version=1)
-    subreddits_fg = fs.get_feature_group("reddit_subreddits", version=1)
+    posts_fg = fs.get_feature_group("reddit_posts", version=os.getenv("POSTS_FG_VERSION", default=1))
+    users_fg = fs.get_feature_group("reddit_users", version=os.getenv("USERS_FG_VERSION", default=1))
+    subreddits_fg = fs.get_feature_group("reddit_subreddits", version=os.getenv("SUBREDDITS_FG_VERSION", default=1))
 
     # Select features that are necessary for joins or model training and exclude the meta data
     posts_selection = posts_fg.select_except(features=["date_created","link","title","text"])
@@ -38,7 +38,7 @@ def create_feature_view():
     #transformation_functions = {"subreddit_id": label_encoder}
 
     feature_view = fs.create_feature_view(name="reddit_features",
-                                        version=1,
+                                        version=os.getenv("FEATURE_VIEW_VERSION", default=1),
                                         description="Features and labels of the reddit dataset, excluding data that is not relevant for training.",
                                         labels=["num_likes", "upvote_ratio"],
                                         #transformation_functions=transformation_functions,
@@ -49,9 +49,9 @@ def get_full_dataset():
     """
     Retrieves the dataset containing additional info like the raw text of the content and title of a post.
     """
-    posts_fg = fs.get_feature_group("reddit_posts", version=1)
-    users_fg = fs.get_feature_group("reddit_users", version=1)
-    subreddits_fg = fs.get_feature_group("reddit_subreddits", version=1)
+    posts_fg = fs.get_feature_group("reddit_posts", version=os.getenv("POSTS_FG_VERSION", default=1))
+    users_fg = fs.get_feature_group("reddit_users", version=os.getenv("USERS_FG_VERSION", default=1))
+    subreddits_fg = fs.get_feature_group("reddit_subreddits", version=os.getenv("SUBREDDITS_FG_VERSION", default=1))
     full_join = posts_fg.select_all().join(
                         users_fg.select_all(), on=["user_id", "snapshot_time"]).join(
                             subreddits_fg.select_all(), on=["subreddit_id", "snapshot_time"])
@@ -60,8 +60,11 @@ def get_full_dataset():
 
 
 def get_model_features(with_validation_set=False, version=None):
+    """
+    :param version: The version of the train split to use. If None, a new split is generated.
+    """
     try:
-        feature_view = fs.get_feature_view(name="reddit_features", version=1)
+        feature_view = fs.get_feature_view(name="reddit_features", version=os.getenv("FEATURE_VIEW_VERSION", default=1))
     except Exception as e:
         feature_view = create_feature_view()
 
@@ -75,7 +78,7 @@ def get_model_features(with_validation_set=False, version=None):
     return feature_view.train_test_split(test_size=0.2)
 
 # TODO: Bin the number of likes into ranges and try to predict the range instead of the exact number
-X_train, X_test, y_train, y_test = get_model_features(version=6)
+X_train, X_test, y_train, y_test = get_model_features(version=None)
 model = Pipeline(steps=[
                     ("preprocessor", get_preprocessor("tree")),
                     ("model", xgboost.XGBRegressor())
@@ -112,8 +115,6 @@ ax1.set_xlabel("Actual number of likes")
 ax1.set_ylabel("Predicted number of likes")
 ax2.set_xlabel("Actual upvote ratio")
 ax2.set_ylabel("Predicted upvote ratio")
-ax1.set_xscale("log")
-ax1.set_yscale("log")
 sns.kdeplot(x=y_test["num_likes"], y=y_pred[:,0], color='blue', ax=ax1)
 sns.kdeplot(x=y_test["upvote_ratio"], y=y_pred[:,1], color='blue', ax=ax2)
 
@@ -131,6 +132,10 @@ ax2.plot([min_ratio, max_ratio], [min_ratio, max_ratio], color='green')
 if not os.path.exists("results"):
     os.makedirs("results")
 fig.savefig("results/prediction_error.png")
+
+ax1.set_xscale("log")
+ax1.set_yscale("log")
+fig.savefig("results/prediction_error_logscale.png")
 
 
 # TODO: Define and upload model together with the fitted preprocessor
