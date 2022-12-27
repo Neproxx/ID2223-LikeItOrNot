@@ -1,8 +1,4 @@
-from transformers import AutoModelForSequenceClassification
-from transformers import AutoTokenizer
 from scipy.special import softmax
-from sentence_transformers import SentenceTransformer
-
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -14,13 +10,29 @@ import pandas as pd
 from warnings import warn
 from datetime import datetime, timedelta
 
-# Load models for feature pre-processing
+# Models for sentiment analysis and text encoding
 sentiment_model_name = f"cardiffnlp/twitter-roberta-base-sentiment-latest"
+sentiment_model = None
+text_encoder = None
+
+
+def load_sentiment_model():
+    global sentiment_model
+    if sentiment_model is None:
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
 sentiment_model = {
     "tokenizer": AutoTokenizer.from_pretrained(sentiment_model_name),
     "model": AutoModelForSequenceClassification.from_pretrained(sentiment_model_name)
 }
+    return sentiment_model
+
+
+def load_text_encoder():
+    global text_encoder
+    if text_encoder is None:
+        from sentence_transformers import SentenceTransformer
 text_encoder = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+    return text_encoder
 
 
 def get_sentiment(text: str):
@@ -36,6 +48,7 @@ def get_sentiment(text: str):
         return " ".join(new_text)
 
     try:
+        sentiment_model = load_sentiment_model()
         text = preprocess(text)
         encoded_input = sentiment_model["tokenizer"](text, return_tensors='pt', max_length=512, truncation=True)
         output = sentiment_model["model"](**encoded_input)
@@ -54,6 +67,7 @@ def get_text_embedding(text: str):
     Creates an embedding for the given text using the MiniLM model.
     https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
     """
+    text_encoder = load_text_encoder()
     return text_encoder.encode([text])[0]
 
 
