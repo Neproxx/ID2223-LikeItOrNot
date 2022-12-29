@@ -11,3 +11,4 @@ scikit-learn
 python-dotenv
 seaborn
 matplotlib
+pytest

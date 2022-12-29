@@ -86,6 +86,8 @@ An interactive UI allows the user to enter the content of his/her post or commen
 
 At the end of the feature pipeline, the extracted data is tested against a set of expectation rules using the `Great Expectations` framework. Such tests include for example whether the text embeddings consist of arrays of length 384 or if all columns have the correct data type. That way, we can be confident that the newly added data has sufficient quality. In Hopsworks it is possible to activate alerts that trigger on validation events. Alternatively, the user can always view the results in the Hopsworks UI for the feature groups.
 
+We use continuous integration (CI) with Github actions to execute a number of unit tests on every commit. Since extracting features from posts is not deterministic over time, we cannot test for the actual values extracted. Imagine for example that a user is deleted. We use an archived post for testing to minimize the risk of the tests failing for legitimate reasons. The main purpose of the tests is to check whether extraction is still possible after a Github commit was done and that the extracted data is not empty. Similarly, we test whether a model can be trained successfully.
+
 ## Running the script
 
 Firstly, if you want to run the scripts locally, make sure to have created a .env file that contains the necessary environment variables namely. If you plan on running the scripts on modal, you have to add the environment variables there. <span style="color:red">Add all of them to the same secret called "reddit-predict"</span>.
