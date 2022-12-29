@@ -20,10 +20,10 @@ def load_sentiment_model():
     global sentiment_model
     if sentiment_model is None:
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
-sentiment_model = {
-    "tokenizer": AutoTokenizer.from_pretrained(sentiment_model_name),
-    "model": AutoModelForSequenceClassification.from_pretrained(sentiment_model_name)
-}
+        sentiment_model = {
+            "tokenizer": AutoTokenizer.from_pretrained(sentiment_model_name),
+            "model": AutoModelForSequenceClassification.from_pretrained(sentiment_model_name)
+        }
     return sentiment_model
 
 
@@ -31,7 +31,7 @@ def load_text_encoder():
     global text_encoder
     if text_encoder is None:
         from sentence_transformers import SentenceTransformer
-text_encoder = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+        text_encoder = SentenceTransformer('paraphrase-MiniLM-L6-v2')
     return text_encoder
 
 
