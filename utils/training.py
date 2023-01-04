@@ -10,8 +10,14 @@ from hsml.model_schema import ModelSchema
 from bayes_opt import BayesianOptimization, UtilityFunction
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.pipeline import Pipeline
-from utils.feature_processing import get_model_pipeline
-from utils.feature_validation import validate_preprocessor
+
+# Huggingface UI must import from submodule "main_repo"
+try:
+    from utils.feature_processing import get_model_pipeline
+    from utils.feature_validation import validate_preprocessor
+except:
+    from main_repo.utils.feature_processing import get_model_pipeline
+    from main_repo.utils.feature_validation import validate_preprocessor
 
 def get_full_dataset(fs):
     """
