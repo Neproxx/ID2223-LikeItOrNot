@@ -2,6 +2,7 @@ from scipy.special import softmax
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import Pipeline
 import numpy as np
 
 import praw
@@ -284,6 +285,18 @@ class ColumnExpander(BaseEstimator, TransformerMixin):
             X.drop(columns=[col], inplace=True)
         return X
 
+class ColumnReorderer(BaseEstimator, TransformerMixin):
+    """Ensures that the column order is the same during training and inference."""
+    def __init__(self):
+        self.column_order = None
+
+    def fit(self, X, y=None):
+        self.column_order = X.columns
+        return self
+
+    def transform(self, X):
+        return X[self.column_order]
+
 
 def get_preprocessor(model_type="tree"):
     """
@@ -300,3 +313,10 @@ def get_preprocessor(model_type="tree"):
     else:
         # NOTE: If using non-tree based models, we need to scale the data
         raise NotImplementedError(f"Preprocessing data for model type {model_type} is not implemented.")
+
+def get_model_pipeline(model, model_type="tree"):
+    return Pipeline(steps=[
+                    ("column_reorderer", ColumnReorderer()),
+                    ("preprocessor", get_preprocessor(model_type)),
+                    ("model", model)
+                    ])

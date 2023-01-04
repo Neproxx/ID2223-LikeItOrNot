@@ -2,7 +2,9 @@ RUN_ON_MODAL=True
 
 # Specify maximum time to crawl in seconds. Modal will have a timeout threshold of MAX_CRAWL_TIME + 15 minutes
 # The additional 15 minutes are to allow for the pipeline to finish and upload everything.
-MAX_CRAWL_TIME = 100*60
+MAX_CRAWL_TIME = 2*60*60
+
+# TODO: Add random subreddit posts to train on "unknown" subreddits?
 
 def g():
     import os
@@ -60,30 +62,30 @@ def g():
         # Fiter out posts that are younger than 48 hours, as we assume that
         # the number of like to have converged after that time
         try:
-        if (post is None or post.created_utc is None or post.id is None or
-            post.title is None or post.selftext is None or post.author is None or
-            not hasattr(post.author, "id") or post.author.id is None or post.subreddit is None or
-            post.subreddit.id is None or post.upvote_ratio is None or post.score is None):
-            return False
+            if (post is None or post.created_utc is None or post.id is None or
+                post.title is None or post.selftext is None or post.author is None or
+                not hasattr(post.author, "id") or post.author.id is None or post.subreddit is None or
+                post.subreddit.id is None or post.upvote_ratio is None or post.score is None):
+                return False
        
-        post_age = datetime.utcnow() - datetime.fromtimestamp(post.created_utc)
-        if post_age < timedelta(days=2):
-            #print("Skipping post because it is too young: " + post.id + " " + post.title + " " + post.url)
-            return False
+            post_age = datetime.utcnow() - datetime.fromtimestamp(post.created_utc)
+            if post_age < timedelta(days=2):
+                #print("Skipping post because it is too young: " + post.id + " " + post.title + " " + post.url)
+                return False
 
-        # Filter out posts that do not represent textual content but links to other pages
-        if not post.is_self:
-            #print("Skipping post because it is not a self post: " + post.id + " " + post.title + " " + post.url)
-            return False
+            # Filter out posts that do not represent textual content but links to other pages
+            if not post.is_self:
+                #print("Skipping post because it is not a self post: " + post.id + " " + post.title + " " + post.url)
+                return False
 
-        if post.id in processed_post_ids:
-            #print("Skipping post because it has already been processed: " + post.id + " " + post.title + " " + post.url)
-            return False
+            if post.id in processed_post_ids:
+                #print("Skipping post because it has already been processed: " + post.id + " " + post.title + " " + post.url)
+                return False
 
-        if not hasattr(post.author, "id"):
-            #print("Skipping post because author is deleted: " + post.id + " " + post.title + " " + post.url)
-            return False
-        return True
+            if not hasattr(post.author, "id"):
+                #print("Skipping post because author is deleted: " + post.id + " " + post.title + " " + post.url)
+                return False
+            return True
 
         # Sometimes the post was deleted and we get a 404 error
         except Exception as e:
@@ -102,7 +104,7 @@ def g():
         :param deadline: Time after which the function should stop processing and upload the data to Hopsworks.
                          Otherwise, modal may throw a timeout error.
         """
-        max_posts_per_subreddit = 60
+        max_posts_per_subreddit = 100
         df_posts = pd.DataFrame()
         df_users = pd.DataFrame()
         df_subreddits = pd.DataFrame()

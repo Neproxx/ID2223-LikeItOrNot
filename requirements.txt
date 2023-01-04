@@ -12,3 +12,5 @@ python-dotenv
 seaborn
 matplotlib
 pytest
+shap
+bayesian-optimization

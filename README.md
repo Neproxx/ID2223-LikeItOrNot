@@ -76,11 +76,15 @@ The script extracts data for three entity types that are stored in their individ
 
 ## Training Pipeline
 
-We use an XGBoost regressor as the model and perform extensive hyperparameter search thanks to the efficient training process.
+We use an XGBoost regressor as the prediction model and choose its hyperparameters using Bayesian Optimization. We chose XGBoost due to its general modeling power and the efficient training process that allows for extensive hyperparameter search. In addition to that, this tree based model can be explained using the SHAP library for machine learning explainability. As a consequence, we can see the importance and kind of impact of the different features on the predictions. Furthermore, when the user performs a prediction in the UI, we can explain the specific prediction to some extent and give advice to the user on how to improve (e.g. changing the time of day of posting on Reddit).
+
+We post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
 
 ## Inference Pipeline / UI
 
 An interactive UI allows the user to enter the content of his/her post or comment alongside his profile. The service will then extract the necessary features, query the model and display the number of likes to be expected.
+
+If you choose to deploy this UI yourself, do not forget to add the Hopsworks and Reddit environment variables to the Huggingface space as mentioned further below.
 
 ## MLOps
 
@@ -98,6 +102,7 @@ Firstly, if you want to run the scripts locally, make sure to have created a .en
 - `REDDIT_USER_AGENT`
 
 Optionally, you can add the following environment variables to indicate the version of the feature group to use:
+
 - `POSTS_FG_VERSION`
 - `USERS_FG_VERSION`
 - `SUBREDDITS_FG_VERSION`
