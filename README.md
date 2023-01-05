@@ -92,7 +92,7 @@ At the end of the feature pipeline, the extracted data is tested against a set o
 
 We use continuous integration (CI) with Github actions to execute a number of unit tests on every commit. Since extracting features from posts is not deterministic over time, we cannot test for the actual values extracted. Imagine for example that a user is deleted. We use an archived post for testing to minimize the risk of the tests failing for legitimate reasons. The main purpose of the tests is to check whether extraction is still possible after a Github commit was done and that the extracted data is not empty. Similarly, we test whether a model can be trained successfully.
 
-After the tests were run successfully, the feature pipeline deployment on modal is updated automatically within the Github workflow.
+After the tests were run successfully, we use continuous deployment (CD) to update the feature pipeline deployment on modal within the Github workflow.
 
 ## Running the script
 
