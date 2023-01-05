@@ -187,7 +187,12 @@ def post_process_predictions(y_pred):
     Post-processes the predictions of the model to ensure that the predictions are within the valid range.
     """
     # Number of likes can be positive or negative, but upvote ratio can only be between 0 and 1
-    y_pred[1] = y_pred[1].clip(0, 1)
+    # single sample
+    if len(y_pred.shape) == 1:
+        y_pred[1] = y_pred[1].clip(0, 1)
+        return y_pred
+    # multiple samples
+    y_pred[:, 1] = y_pred[:, 1].clip(0, 1)
     return y_pred
 
 

@@ -80,6 +80,8 @@ We use an XGBoost regressor as the prediction model and select its hyperparamete
 
 In addition to the XGBoost model, we post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
 
+The massive imbalance between top posts low quality posts makes training difficult. XGBoost offers only a selected number of objective functions like mean squared error or mean squared log error. The former biases heavily towards posts with few likes while the latter biases towards posts with many likes. A tradeoff like mean absolute error is not possible, as this metric is not twice differentiable. For that reason, we incorporate sample weights that are proportional to the squareroot of the number of likes. A heavier bias towards posts with few likes is possible by using the log instead of the squareroot, however this proved to be too extreme for our case.
+
 ## Inference Pipeline / UI
 
 An interactive UI allows the user to enter the content of his/her post or comment alongside his profile. The service will then extract the necessary features, query the model and display the number of likes to be expected. To prevent inconsistencies between feature extraction in the feature pipeline and the UI, the frontend application accesses the same processing code from the main repository through a git submodule.
