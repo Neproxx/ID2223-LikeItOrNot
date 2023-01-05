@@ -32,3 +32,8 @@ jobs:
           USERS_FG_VERSION: ${{ secrets.USERS_FG_VERSION }}
           SUBREDDITS_FG_VERSION: ${{ secrets.SUBREDDITS_FG_VERSION }}
           FEATURE_VIEW_VERSION: ${{ secrets.FEATURE_VIEW_VERSION }}
+      - name: Update Modal deployment
+        run: modal deploy ${{ github.workspace }}/feature_pipeline.py --name feature_pipeline
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}

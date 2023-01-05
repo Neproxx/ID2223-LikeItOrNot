@@ -76,9 +76,9 @@ The script extracts data for three entity types that are stored in their individ
 
 ## Training Pipeline
 
-We use an XGBoost regressor as the prediction model and choose its hyperparameters using Bayesian Optimization. We chose XGBoost due to its general modeling power and the efficient training process that allows for extensive hyperparameter search. In addition to that, this tree based model can be explained using the SHAP library for machine learning explainability. As a consequence, we can see the importance and kind of impact of the different features on the predictions. Furthermore, when the user performs a prediction in the UI, we can explain the specific prediction to some extent and give advice to the user on how to improve (e.g. changing the time of day of posting on Reddit).
+We use an XGBoost regressor as the prediction model and select its hyperparameters using Bayesian Optimization on a separate validation set. The decision for XGBoost is rooted in its general modeling power and its efficient training process that allows for extensive hyperparameter search. In addition to that, this tree based model can be explained using the SHAP library for machine learning explainability. As a consequence, we can see the magnitude and type of impact of the different features on the predictions. In particular, we can give an immediate explanation of the prediction to user in the UI and give advice on how to improve the post (e.g. changing the time of day of posting on Reddit).
 
-We post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
+In addition to the XGBoost model, we post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
 
 ## Inference Pipeline / UI
 
@@ -91,6 +91,8 @@ If you choose to deploy this UI yourself, do not forget to add the Hopsworks and
 At the end of the feature pipeline, the extracted data is tested against a set of expectation rules using the `Great Expectations` framework. Such tests include for example whether the text embeddings consist of arrays of length 384 or if all columns have the correct data type. That way, we can be confident that the newly added data has sufficient quality. In Hopsworks it is possible to activate alerts that trigger on validation events. Alternatively, the user can always view the results in the Hopsworks UI for the feature groups.
 
 We use continuous integration (CI) with Github actions to execute a number of unit tests on every commit. Since extracting features from posts is not deterministic over time, we cannot test for the actual values extracted. Imagine for example that a user is deleted. We use an archived post for testing to minimize the risk of the tests failing for legitimate reasons. The main purpose of the tests is to check whether extraction is still possible after a Github commit was done and that the extracted data is not empty. Similarly, we test whether a model can be trained successfully.
+
+After the tests were run successfully, the feature pipeline deployment on modal is updated automatically within the Github workflow.
 
 ## Running the script
 
@@ -108,13 +110,18 @@ Optionally, you can add the following environment variables to indicate the vers
 - `SUBREDDITS_FG_VERSION`
 - `FEATURE_VIEW_VERSION`
 
+You may also add the below environment variables for Modal. To use automatic deployment with github workflows, it is necessary to add all the hopsworks, reddit and modal environment variables to the Github repository.
+
+- `MODAL_TOKEN_ID`
+- `MODAL_TOKEN_SECRET`
+
 Secondly, this repository contains a Dockerfile to build a container for this tool that runs in any local environment. In order to use it, simply run the below command which builds the container, starts it and provides you with a terminal inside the container where you can run the scripts from. In case of development, you can modify files locally and the changes will come into effect inside the container immediately. Note that building the container can take up to 15 minutes due to the large requirements.
 
 ```console
 docker compose run reddit-predict
 ```
 
-In case you want to run the script on `modal`, execute the following commands after you started the container and follow the instructions. It will generate a new token that the container needs to authenticate itself to modal. Also, do not forget to set `RUN_ON_MODAL=True`.
+In case you want to run the script on `modal` and you have not added the modal environment variables, you have to execute the following commandsafter you started the container and follow the instructions. It will generate a new token that the container needs to authenticate itself to modal. Also, do not forget to set `RUN_ON_MODAL=True`.
 
 ```console
 modal token new

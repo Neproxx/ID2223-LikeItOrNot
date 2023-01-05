@@ -1,5 +1,5 @@
 # Stage 1 - install dependencies
-FROM python:3.7-bullseye as builder
+FROM python:3.8-bullseye as builder
 
 WORKDIR /app
 
