@@ -285,6 +285,11 @@ class ColumnExpander(BaseEstimator, TransformerMixin):
             X.drop(columns=[col], inplace=True)
         return X
 
+    def get_feature_names_out(self, input_features=None):
+        if input_features is None:
+            input_features = self.columns
+        return [f"{col}_{str(i).zfill(3)}" for col in input_features for i in range(384)]
+
 class ColumnReorderer(BaseEstimator, TransformerMixin):
     """Ensures that the column order is the same during training and inference."""
     def __init__(self):
@@ -295,7 +300,13 @@ class ColumnReorderer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        return X[self.column_order]
+        try:
+            return X[self.column_order]
+        except KeyError as e:
+            print(f"Error during column reordering: {e}")
+            print(f"Expected {len(self.column_order)} columns: {self.column_order}")
+            print(f"Found {len(X.columns)} columns: {X.columns}")
+            raise e
 
 
 def get_preprocessor(model_type="tree"):

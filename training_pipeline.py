@@ -30,10 +30,11 @@ import modal
 stub = modal.Stub()
 image = modal.Image.debian_slim().pip_install(["hopsworks","joblib","pandas","xgboost","scikit-learn","seaborn","praw","bayesian-optimization","shap"])
 @stub.function(image=image,
-               schedule=modal.Period(days=1),
+               schedule=modal.Period(days=7),
                secret=modal.Secret.from_name("reddit-predict"),
                mounts=[modal.Mount(remote_dir="/root/utils", local_dir="./utils")],
-               timeout=60*60, # 1h timeout
+               timeout=30*60, # 30min timeout
+               gpu="any",
                retries=1
                )
 def f():

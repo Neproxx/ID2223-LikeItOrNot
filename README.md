@@ -82,7 +82,7 @@ In addition to the XGBoost model, we post-process the predictions to reflect the
 
 ## Inference Pipeline / UI
 
-An interactive UI allows the user to enter the content of his/her post or comment alongside his profile. The service will then extract the necessary features, query the model and display the number of likes to be expected.
+An interactive UI allows the user to enter the content of his/her post or comment alongside his profile. The service will then extract the necessary features, query the model and display the number of likes to be expected. To prevent inconsistencies between feature extraction in the feature pipeline and the UI, the frontend application accesses the same processing code from the main repository through a git submodule.
 
 If you choose to deploy this UI yourself, do not forget to add the Hopsworks and Reddit environment variables to the Huggingface space as mentioned further below.
 
@@ -126,6 +126,10 @@ In case you want to run the script on `modal` and you have not added the modal e
 ```console
 modal token new
 ```
+
+## Possible future improvements
+
+As the system keeps running for longer time, it becomes necessary to check whether the distribution of the data changes over time. Also, the train / test / validation splits should take into account that the data is temporal and should be splitted that way. However, this is only possible when the system has gathered data over a period of time that is sufficiently long. The main reason is that top posts are much rarer than trash posts and thus to learn to predict higher number of likes, we incorporated top posts from all months of 2022 whereas most trash posts are from December 2022. This imbalance is a natural limitation of the api we used and because of it a temporal split does not make sense at this point. At a future point it would be possible to detect different kinds of drifts.
 
 ## Internal notes for implementation
 
