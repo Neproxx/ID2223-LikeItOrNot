@@ -1,11 +1,11 @@
-RUN_ON_MODAL=False
+RUN_ON_MODAL=True
+USE_GPU=True
+BAYESIAN_SEARCH=True
 
 def g():
     from utils.training import train_model, upload_model_to_hopsworks, generate_prediction_plots, get_metrics, post_process_predictions
-    
-    # TODO: Try to bin the number of likes into ranges and try to predict the range instead of the exact number
 
-    model, X_train, X_test, y_train, y_test = train_model(bayesian_search=True)
+    model, X_train, X_test, y_train, y_test = train_model(bayesian_search=BAYESIAN_SEARCH, bayesian_n_iterations=7, use_gpu=USE_GPU)
 
     # Note: the model automatically calls transform on all the preprocessing steps and then calls predict on the model
     y_pred = model.predict(X_test)
@@ -21,19 +21,29 @@ def g():
 
     # TODO: General shap evaluation
 
-    upload_model_to_hopsworks(model, X_train, y_train, metrics)
+    # TODO: Generate confusion matrix for ranges of likes
 
-    # TODO: how does bayesian handle multi output? Better to just give it the output of the num_likes prediction?
+    try:
+        upload_model_to_hopsworks(model, X_train, y_train, metrics)
+    except Exception as e:
+        import traceback
+        import pickle
+        print("Could not upload model to hopsworks")
+        print(e)
+        traceback.print_exc()
+        with open("rescue_save.pkl", "wb") as f:
+            rescue = [model, X_train, X_test, y_train, y_test, metrics]
+            pickle.dump(rescue, f)
 
 
 import modal
 stub = modal.Stub()
-image = modal.Image.debian_slim().pip_install(["hopsworks","joblib","pandas","xgboost","scikit-learn","seaborn","praw","bayesian-optimization","shap"])
+image = modal.Image.debian_slim().pip_install(["hopsworks==3.0.5","joblib==1.2.0","pandas==1.3.5","xgboost==1.6.2","scikit-learn==1.2.0","seaborn==0.12.2","praw==7.6.1","bayesian-optimization==1.4.2","shap==0.41.0"])
 @stub.function(image=image,
                schedule=modal.Period(days=7),
                secret=modal.Secret.from_name("reddit-predict"),
                mounts=[modal.Mount(remote_dir="/root/utils", local_dir="./utils")],
-               timeout=30*60, # 30min timeout
+               timeout=60*60, # 60min timeout
                gpu="any",
                retries=1
                )

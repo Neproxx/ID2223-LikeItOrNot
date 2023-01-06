@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 import xgboost
 import hopsworks
 import joblib
@@ -8,16 +9,16 @@ import matplotlib.pyplot as plt
 from hsml.schema import Schema
 from hsml.model_schema import ModelSchema
 from bayes_opt import BayesianOptimization, UtilityFunction
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error, mean_squared_log_error
 from sklearn.pipeline import Pipeline
 
 # Huggingface UI must import from submodule "main_repo"
-try:
-    from utils.feature_processing import get_model_pipeline
-    from utils.feature_validation import validate_preprocessor
-except:
-    from main_repo.utils.feature_processing import get_model_pipeline
-    from main_repo.utils.feature_validation import validate_preprocessor
+#try:
+from utils.feature_processing import get_model_pipeline
+from utils.feature_validation import validate_preprocessor
+#except:
+#    from main_repo.utils.feature_processing import get_model_pipeline
+#    from main_repo.utils.feature_validation import validate_preprocessor
 
 def get_full_dataset(fs):
     """
@@ -66,15 +67,6 @@ def create_feature_view(fs):
                         users_selection, on=["user_id", "snapshot_time"]).join(
                             subreddits_selection, on=["subreddit_id", "snapshot_time"])
 
-    # Note: There is hardly any documentation on which transformations are available (no onehot encoders?),
-    # There is even less on how to implement custom ones and using the label_encoder we get an incomprehensible error
-    # Thus, the most reasonable solution is to instead define our own sklearn pipeline.
-    # OLD code:
-    # Load transformation functions. Other functions that exist: "min_max_scaler", "robust_scaler"
-    #label_encoder = fs.get_transformation_function(name="label_encoder", online=False)
-    # Map features to transformations. Note that xgboost does not need scaling, but other algorithms would.
-    #transformation_functions = {"subreddit_id": label_encoder}
-
     feature_view = fs.create_feature_view(name="reddit_features",
                                         version=os.getenv("FEATURE_VIEW_VERSION", default=1),
                                         description="Features and labels of the reddit dataset, excluding data that is not relevant for training.",
@@ -83,7 +75,7 @@ def create_feature_view(fs):
                                         query=join_query)
     return feature_view
 
-def get_optimal_hyperparameters(n_iterations):
+def get_optimal_hyperparameters(n_iterations,use_gpu=False):
     """
     Uses evaluate_model as black box function to optimize the hyperparameters of the model.
     """
@@ -98,24 +90,29 @@ def get_optimal_hyperparameters(n_iterations):
         Uses the training and test data from the enclosing context ("closure").
         """
         model = get_model_pipeline(
-            xgboost.XGBRegressor(
-                            n_estimators=int(n_estimators), 
-                            max_depth=int(max_depth),
-                            eta=eta,
-                            subsample=subsample,
-                            colsample_bytree=colsample_bytree),
+            get_regressor(
+                        n_estimators=int(n_estimators),
+                        max_depth=int(max_depth),
+                        eta=eta,
+                        subsample=subsample,
+                        colsample_bytree=colsample_bytree,
+                        use_gpu=use_gpu
+                        ),
             "tree"
         )
-        model.fit(X_train, y_train)
+
+        weights_train = get_weights(y_train)
+        model.fit(X_train, y_train, model__sample_weight=weights_train)
         y_pred = model.predict(X_val)
         y_pred = post_process_predictions(y_pred)
-        rmse_num_likes = mean_squared_error(y_val, y_pred, squared=False, multioutput="raw_values")[0]
-        #mae = mean_absolute_error(y_test, y_pred, multioutput="raw_values")
-        #r2 = r2_score(y_test, y_pred, multioutput="raw_values")
-        return -rmse_num_likes
+
+        # Weigh num_likes and upvote_ratio 4:1
+        weights_val = get_weights(y_val)
+        mse_num_likes = mean_squared_error(y_val, y_pred, squared=True, multioutput=[0.8, 0.2], sample_weight=weights_val)
+        return -mse_num_likes
     
     # Define parameter space to explore
-    pbounds = {'n_estimators': (100, 1000), 'max_depth': (3, 16), 'eta': (0.01, 0.2), 'subsample': (0.5, 1), 'colsample_bytree': (0.5, 1)}
+    pbounds = {'n_estimators': (100, 3000), 'max_depth': (3, 25), 'eta': (0.001, 0.2), 'subsample': (0.5, 1), 'colsample_bytree': (0.5, 1)}
     optimizer = BayesianOptimization(
         f=evaluate_model,
         pbounds=pbounds,
@@ -148,28 +145,48 @@ def get_optimal_hyperparameters(n_iterations):
     }
 
 
-def train_model(bayesian_search=True, bayesian_n_iterations=15):
+def get_weights(y_true):
+    """
+    Returns the sample weights which correspond to the log of the values.
+    """
+    y_true = np.abs(y_true.copy().values[:,0])
+    return 1 / (y_true + 1)
+
+
+def get_regressor(n_estimators, max_depth, eta, subsample, colsample_bytree, use_gpu=False):
+    """
+    Returns a XGBoost regressor with the given hyperparameters.
+    """
+    return xgboost.XGBRegressor(
+                        n_estimators=n_estimators, 
+                        max_depth=max_depth,
+                        eta=eta,
+                        subsample=subsample,
+                        colsample_bytree=colsample_bytree,
+                        objective="reg:squarederror",
+                        tree_method="gpu_hist" if use_gpu else "hist",
+            )
+
+
+
+def train_model(bayesian_search=True, bayesian_n_iterations=10, use_gpu=False):
     if bayesian_search:
-        results = get_optimal_hyperparameters(n_iterations=bayesian_n_iterations)
+        results = get_optimal_hyperparameters(n_iterations=bayesian_n_iterations, use_gpu=use_gpu)
         n_estimators, max_depth, eta, subsample, colsample_bytree = results["parameters"]
         X_train, X_test, y_train, y_test = results["data"]
         model = get_model_pipeline(
-            xgboost.XGBRegressor(
-                            n_estimators=n_estimators,
-                            max_depth=max_depth,
-                            eta=eta,
-                            subsample=subsample,
-                            colsample_bytree=colsample_bytree
-                ),
+            get_regressor(n_estimators, max_depth, eta, subsample, colsample_bytree, use_gpu),
             "tree"
         )
     else:
         model = get_model_pipeline(
-            xgboost.XGBRegressor(
-                n_estimators=500,
-                max_depth=9,
+            get_regressor(
+                n_estimators=2300,
+                max_depth=12,
                 eta=0.01,
-                colsample_bytree=0.5
+                colsample_bytree=0.90,
+                subsample=0.55,
+                use_gpu=use_gpu
             ),
             "tree"
         )
@@ -178,7 +195,8 @@ def train_model(bayesian_search=True, bayesian_n_iterations=15):
         print("Done")
     validate_preprocessor(model.named_steps["preprocessor"], X_train, "tree")
     print("Starting final training run...")
-    model.fit(X_train, y_train)
+    weights = get_weights(y_train)
+    model.fit(X_train, y_train, model__sample_weight=weights)
     return model, X_train, X_test, y_train, y_test
 
 
@@ -197,25 +215,42 @@ def post_process_predictions(y_pred):
 
 
 def get_metrics(y_test, y_pred):
-    rmse = mean_squared_error(y_test, y_pred, multioutput="raw_values", squared=False)
-    mae = mean_absolute_error(y_test, y_pred, multioutput="raw_values")
-    r2 = r2_score(y_test, y_pred, multioutput="raw_values")
+    weights = get_weights(y_test)
+    rmse = mean_squared_error(y_test, y_pred, multioutput="raw_values", squared=False, sample_weight=weights)
+    mae = mean_absolute_error(y_test, y_pred, multioutput="raw_values", sample_weight=weights)
+    r2 = r2_score(y_test, y_pred, multioutput="raw_values", sample_weight=weights)
+    mape = mean_absolute_percentage_error(y_test, y_pred, multioutput="raw_values", sample_weight=weights)
+
+    # Note: RMSLE is not defined for negative values, so we need to clip the values to be positive
+    y_test_copy = y_test.copy()
+    y_pred_copy = y_pred.copy()
+    y_test_copy[y_test_copy <= 0] = 0
+    y_pred_copy[y_pred_copy <= 0] = 0
+    rmsle = mean_squared_log_error(y_test_copy, y_pred_copy, multioutput="raw_values", sample_weight=weights)
+    
     metrics = {
         "rmse_likes": rmse[0],
+        "rmsle_likes": rmsle[0],
         "mae_likes": mae[0],
+        "mape_likes": mape[0],
         "r2_likes": r2[0],
         "rmse_upvote_ratio": rmse[1],
+        "rmsle_upvote_ratio": rmsle[1],
         "mae_upvote_ratio": mae[1],
+        "mape_upvote_ratio": mape[1],
         "r2_upvote_ratio": r2[1]
     }
 
     print("RMSE num_likes: %.2f" % metrics["rmse_likes"])
+    print("RMSLE num_likes: %.2f" % metrics["rmsle_likes"])
     print("MAE num_likes: %.2f" % metrics["mae_likes"])
+    print("MAPE num_likes: %.2f" % metrics["mape_likes"])
     print("R2 num_likes: %.2f" % metrics["r2_likes"])
     print("RMSE upvote_ratio: %.2f" % metrics["rmse_upvote_ratio"])
+    print("RMSLE upvote_ratio: %.2f" % metrics["rmsle_upvote_ratio"])
     print("MAE upvote_ratio: %.2f" % metrics["mae_upvote_ratio"])
+    print("MAPE upvote_ratio: %.2f" % metrics["mape_upvote_ratio"])
     print("R2 upvote_ratio: %.2f" % metrics["r2_upvote_ratio"])
-
     return metrics
 
 
@@ -282,9 +317,12 @@ def upload_model_to_hopsworks(model: Pipeline, X_train, y_train, metrics):
     model_dir="reddit_model"
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
+    if os.path.isfile(model_dir + "/reddit_model.pkl"):
+        print("Removing old model...")
+        os.remove(model_dir + "/reddit_model.pkl")
+        print(f"Is removed: {not os.path.isfile(model_dir + '/reddit_model.pkl')}")
     joblib.dump(model, model_dir + "/reddit_model.pkl")
-    #model.save_model(model_dir + "/reddit_model.json") # xgboost has problems with pickle
-    # fig.savefig(model_dir + "/confusion_matrix.png") # TODO?
+    print(f"Model saved to disk: {os.path.isfile(model_dir + '/reddit_model.pkl')}")
 
     # Specify the schema of the model's input/output (names, data types, ...)
     input_schema = Schema(X_train)

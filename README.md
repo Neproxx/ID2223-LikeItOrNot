@@ -80,11 +80,27 @@ We use an XGBoost regressor as the prediction model and select its hyperparamete
 
 In addition to the XGBoost model, we post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
 
-The massive imbalance between top posts low quality posts makes training difficult. XGBoost offers only a selected number of objective functions like mean squared error or mean squared log error. The former biases heavily towards posts with few likes while the latter biases towards posts with many likes. A tradeoff like mean absolute error is not possible, as this metric is not twice differentiable. For that reason, we incorporate sample weights that are proportional to the squareroot of the number of likes. A heavier bias towards posts with few likes is possible by using the log instead of the squareroot, however this proved to be too extreme for our case.
+### Handling imbalances
+
+The massive imbalance between top posts low quality posts makes training difficult. XGBoost offers only a selected number of objective functions like mean squared error or mean squared log error. The former biases heavily towards posts with few likes so that there are no predictions beyond 200 likes (even though they can have up to 100,000 likes). The latter biases towards posts with many likes such that almost no posts have less than 50 likes (even though most have). A tradeoff like mean absolute error is not possible, as this metric is not twice differentiable.
+
+For that reason, we introduce a weight for every sample x in the training set that is the reciprocal of the number of likes: $w(x) = 1/x_{likes}$. With this weighting, the model prioritizes to correctly predict whether a post will have a small, medium or large number of likes. It fails to correctly predict differences in large number of likes, e.g. distinguishing 10.000 from 25.000. However, the user would not care about how successful his post is as long as it is successful and thus this approach is superior to one where a post is often falsely predicted as successful.
+
+It should be noted though, that common error metrics (e.g. R2) will exhibit large errors with this approach that may lead one to the false conclusion that the model was not powerful enough. Below you can see the comparison of predicted vs actual values for a model with and without the described weighting. The green line indicates a perfect prediction and the blue lines show the areas of highest point densities. The right plots differ only in terms of log scale for the x and y axis.
+
+**Predicted vs actual `without sample weighting` (unweighted R2=0.801)**
+
+<img src="media/predictions_without_sample_weighting.png" alt="model weight comparison" width="750"/>
+
+**Predicted vs actual with samples `weighted by inverse number of likes` (unweighted R2=-0.016)**
+
+<img src="media/predictions_with_inverse_likes_weighting.png" alt="model weight comparison" width="750"/>
+
+Note how the model with weighted samples tends to underestimate the number of likes which is much less problematic than overestimating them.
 
 ## Inference Pipeline / UI
 
-An interactive UI allows the user to enter the content of his/her post or comment alongside his profile. The service will then extract the necessary features, query the model and display the number of likes to be expected. To prevent inconsistencies between feature extraction in the feature pipeline and the UI, the frontend application accesses the same processing code from the main repository through a git submodule.
+An interactive UI allows the user to enter the content of his/her post or comment alongside his profile. The service will then extract the necessary features, query the model and display the number of likes to be expected. To prevent inconsistencies between feature extraction in the feature pipeline and the UI, the frontend application accesses the same processing code from the main repository through a git submodule. The model itself is packed together with all model-specific feature transformation functions into an sklearn pipeline to avoid training-inference skew.
 
 If you choose to deploy this UI yourself, do not forget to add the Hopsworks and Reddit environment variables to the Huggingface space as mentioned further below.
 
