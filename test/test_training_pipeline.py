@@ -63,6 +63,7 @@ def test_get_model_features(with_validation):
         assert len(model_features) == 4, f"Expected 4, got {len(model_features)}"
 
 
+@pytest.mark.parametrize("bayesian_search, bayesian_n_iterations", [(True, 1)])
 def test_full_training():
     model, X_train, X_test, y_train, y_test = train_model(bayesian_search=True, bayesian_n_iterations=1)
 
