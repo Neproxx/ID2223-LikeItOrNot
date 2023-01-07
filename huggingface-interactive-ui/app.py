@@ -23,10 +23,6 @@ from main_repo.utils.feature_processing import (extract_user_features,
                                                 get_subreddit_names,)
 from main_repo.utils.training import post_process_predictions
 
-# Local execution
-from dotenv import load_dotenv
-load_dotenv()
-
 
 def get_features(user_name: str, subreddit_name: str, post_title: str, post_text: str, post_date: datetime, post_time: datetime):
     now = datetime.datetime.utcnow()
@@ -103,19 +99,6 @@ def load_model():
     model_hsfs = mr.get_model("reddit_predict", version=10)
     model_dir = model_hsfs.download()
     model = joblib.load(model_dir + "/reddit_model.pkl")
-
-    # debug
-    #try:
-    #    onehotencoder = model.named_steps["preprocessor"].named_transformers_["onehot_encoder"]
-    #    print(f"onehot_encoder.feature_names_in_: {onehotencoder.feature_names_in_}")
-    #    print(f"onehot_encoder.get_feature_names_out(): {onehotencoder.get_feature_names_out()}")
-    #    print(model.named_steps["preprocessor"].get_feature_names_out())
-    #except Exception as e:
-    #    print("Could not print feature names")
-    #    warn(f"Could not extract features")
-    #    print(e)
-    #    traceback.print_exc()
-    # debug
     return model
 
 
