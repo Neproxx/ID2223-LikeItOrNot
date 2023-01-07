@@ -1,0 +1,3 @@
+[submodule "main_repo"]
+	path = main_repo
+	url = https://github.com/Neproxx/ID2223-LikeItOrNot
