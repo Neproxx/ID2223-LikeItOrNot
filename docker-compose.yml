@@ -3,6 +3,8 @@ version: "3.7"
 services:
   reddit-predict:
     command: bash
+    ports:
+      - "5555:8501" # Streamlit port
     build:
       context: ./
       dockerfile: Dockerfile
@@ -14,3 +16,5 @@ services:
     tty: true
 # Start with:
 # docker compose run reddit-predict
+# or:
+# docker compose run -p 5555:8501 reddit-predict

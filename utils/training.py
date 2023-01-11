@@ -150,7 +150,12 @@ def get_weights(y_true):
     Returns the sample weights which correspond to the log of the values.
     """
     y_true = np.abs(y_true.copy().values[:,0])
-    return 1 / (y_true + 1)
+    return 1 / np.power(y_true + 1, 17/16) # reciprocal of the 17/16 root y^17/16
+    #return 1 / np.power(y_true + 1, 9/8) # reciprocal of the 9/8 root y^9/8
+    #return 1 / np.power(y_true + 1, 5/4) # reciprocal of the 5/4 root y^5/4
+    #return 1 / np.power(y_true + 1, 3/2) # reciprocal of the cube root y^3/2
+    #return 1 / (y_true + 1)**2 # reciprocal squared
+    # return 1 / (y_true + 1) # reciprocal
 
 
 def get_regressor(n_estimators, max_depth, eta, subsample, colsample_bytree, use_gpu=False):

@@ -23,7 +23,6 @@ from main_repo.utils.feature_processing import (extract_user_features,
                                                 get_subreddit_names,)
 from main_repo.utils.training import post_process_predictions
 
-
 def get_features(user_name: str, subreddit_name: str, post_title: str, post_text: str, post_date: datetime, post_time: datetime):
     now = datetime.datetime.utcnow()
     try:
@@ -96,7 +95,7 @@ def get_features(user_name: str, subreddit_name: str, post_title: str, post_text
 def load_model():
     project = hopsworks.login()
     mr = project.get_model_registry()
-    model_hsfs = mr.get_model("reddit_predict", version=10)
+    model_hsfs = mr.get_model("reddit_predict", version=16)
     model_dir = model_hsfs.download()
     model = joblib.load(model_dir + "/reddit_model.pkl")
     return model

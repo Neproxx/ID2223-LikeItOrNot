@@ -14,6 +14,8 @@ A long list of subreddits are crawled on a daily basis, these include for exampl
 
 The script extracts data for three entity types that are stored in their individual table namely reddit_users, reddit_posts and reddit_subreddits. Some of the features represent e.g. the raw text and are only kept for plausibilisation reasons. See the enumeration and description of all features below.
 
+In case a lot of samples should be crawled in a short time, it is possible to schedule many instances of the feature pipeline that extract samples from different subreddits which leads to a very scalable system.
+
 ### reddit_posts
 
 - `post_id`: Uniquely identifies the post / submission on reddit.
@@ -66,12 +68,18 @@ The script extracts data for three entity types that are stored in their individ
 - `sentiment_negative_mean`: The mean of the negative sentiment of the most recent top posts in the subreddit.
 - `sentiment_negative_stddev`: The standard deviation of the negative sentiment of the most recent top posts in the subreddit.
 - `sentiment_negative_median`: The median of the negative sentiment of the most recent top posts in the subreddit.
+- `sentiment_negative_80th_percentile`: The 80th percentile of the negative sentiment of the most recent top posts in the subreddit.
+- `sentiment_negative_20th_percentile`: The 20th percentile of the negative sentiment of the most recent top posts in the subreddit.
 - `sentiment_neutral_mean`: The mean of the neutral sentiment of the most recent top posts in the subreddit.
 - `sentiment_neutral_stddev`: The standard deviation of the neutral sentiment of the most recent top posts in the subreddit.
 - `sentiment_neutral_median`: The median of the neutral sentiment of the most recent top posts in the subreddit.
+- `sentiment_neutral_80th_percentile`: The 80th percentile of the neutral sentiment of the most recent top posts in the subreddit.
+- `sentiment_neutral_20th_percentile`: The 20th percentile of the neutral sentiment of the most recent top posts in the subreddit.
 - `sentiment_positive_mean`: The mean of the positive sentiment of the most recent top posts in the subreddit.
 - `sentiment_positive_stddev`: The standard deviation of the positive sentiment of the most recent top posts in the subreddit.
 - `sentiment_positive_median`: The median of the positive sentiment of the most recent top posts in the subreddit.
+- `sentiment_positive_80th_percentile`: The 80th percentile of the positive sentiment of the most recent top posts in the subreddit.
+- `sentiment_positive_20th_percentile`: The 20th percentile of the positive sentiment of the most recent top posts in the subreddit.
 - `embedding_description`: The embedding of the description of the subreddit. Obtained with [sentence-transformers/paraphrase-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L6-v2).
 
 ## Training Pipeline
@@ -82,17 +90,17 @@ In addition to the XGBoost model, we post-process the predictions to reflect the
 
 ### Handling imbalances
 
-The massive imbalance between top posts low quality posts makes training difficult. XGBoost offers only a selected number of objective functions like mean squared error or mean squared log error. The former biases heavily towards posts with few likes so that there are no predictions beyond 200 likes (even though they can have up to 100,000 likes). The latter biases towards posts with many likes such that almost no posts have less than 50 likes (even though most have). A tradeoff like mean absolute error is not possible, as this metric is not twice differentiable.
+The massive imbalance between the number of likes on top posts and on low quality posts makes training very difficult. XGBoost offers only a selected number of objective functions like mean squared error or mean squared log error. The former biases heavily towards posts with few likes so that there are no predictions beyond 200 likes (even though they can have up to 100,000 likes). The latter biases towards posts with many likes such that almost no posts have less than 50 likes (even though most have). A tradeoff like mean absolute error is not possible, as this metric is not twice differentiable.
 
-For that reason, we introduce a weight for every sample x in the training set that is the reciprocal of the number of likes: $w(x) = 1/x_{likes}$. With this weighting, the model prioritizes to correctly predict whether a post will have a small, medium or large number of likes. It fails to correctly predict differences in large number of likes, e.g. distinguishing 10.000 from 25.000. However, the user would not care about how successful his post is as long as it is successful and thus this approach is superior to one where a post is often falsely predicted as successful.
+For that reason, we introduce a weight for every sample x in the training set that is the reciprocal of the number of likes to the power of 9/8: $w(x) = 1/\sqrt[8]{x^9_{likes}}$. After extensive experimentation we noticed that the sample weights $w(x) = 1/x_{likes}$ and $w(x) = 1/x_{likes^2}$ suffer from the same problems as the metrics described in the previous section, as they bias too heavily. On the other hand, the proposed sample weighting allows the model to predict up to 2000 number of likes while being very conservative in outputting high numbers. This is enough to distinguish top performing posts and bad posts which is the original question the user is interested in. In general, the prediction can be seen as a lower bound on the number of likes to be expected instead of the exact number of likes.
 
 It should be noted though, that common error metrics (e.g. R2) will exhibit large errors with this approach that may lead one to the false conclusion that the model was not powerful enough. Below you can see the comparison of predicted vs actual values for a model with and without the described weighting. The green line indicates a perfect prediction and the blue lines show the areas of highest point densities. The right plots differ only in terms of log scale for the x and y axis.
 
-**Predicted vs actual `without sample weighting` (unweighted R2=0.801)**
+**Predicted vs actual `without sample weighting` (R2=0.801)**
 
 <img src="media/predictions_without_sample_weighting.png" alt="model weight comparison" width="750"/>
 
-**Predicted vs actual with samples `weighted by inverse number of likes` (unweighted R2=-0.016)**
+**Predicted vs actual with samples `weighted by inverse number of likes` (R2=0.04)**
 
 <img src="media/predictions_with_inverse_likes_weighting.png" alt="model weight comparison" width="750"/>
 
@@ -149,13 +157,16 @@ modal token new
 
 As the system keeps running for longer time, it becomes necessary to check whether the distribution of the data changes over time. Also, the train / test / validation splits should take into account that the data is temporal and should be splitted that way. However, this is only possible when the system has gathered data over a period of time that is sufficiently long. The main reason is that top posts are much rarer than trash posts and thus to learn to predict higher number of likes, we incorporated top posts from all months of 2022 whereas most trash posts are from December 2022. This imbalance is a natural limitation of the api we used and because of it a temporal split does not make sense at this point. At a future point it would be possible to detect different kinds of drifts.
 
-## Internal notes for implementation
+## Screenshots
 
-Components that need to be created:
+Hopsworks regularly has connection issues which can render the services implemented in this repository unusable. If that is the case at the time you are trying it out, here are screenshots of the interactive UI and the dashboard:
 
-- feature pipeline deployed on modal
-- hyperparameter search for xgboost model
-- feature / models tests (MLOps)
-- feature extraction
-- feature selection
-- Check if SHAP values can be used for ML explainability. Although probably not if the sentence embedding is our main feature :(
+### Interactive UI
+
+<img src="media/interactive-ui.PNG" alt="Screenshot interactive UI" width="750"/>
+
+### Dashboard
+
+<img src="media/dashboard-1.PNG" alt="Screenshot dashboard - 1" width="750"/>
+
+<img src="media/dashboard-2.PNG" alt="Screenshot dashboard - 2" width="750"/>

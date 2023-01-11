@@ -1,11 +1,12 @@
 RUN_ON_MODAL=True
 USE_GPU=True
 BAYESIAN_SEARCH=True
+BAYESIAN_ITERATIONS=7
 
 def g():
     from utils.training import train_model, upload_model_to_hopsworks, generate_prediction_plots, get_metrics, post_process_predictions
 
-    model, X_train, X_test, y_train, y_test = train_model(bayesian_search=BAYESIAN_SEARCH, bayesian_n_iterations=7, use_gpu=USE_GPU)
+    model, X_train, X_test, y_train, y_test = train_model(bayesian_search=BAYESIAN_SEARCH, bayesian_n_iterations=BAYESIAN_ITERATIONS, use_gpu=USE_GPU)
 
     # Note: the model automatically calls transform on all the preprocessing steps and then calls predict on the model
     y_pred = model.predict(X_test)
