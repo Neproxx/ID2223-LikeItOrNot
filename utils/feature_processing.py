@@ -310,6 +310,14 @@ def get_preprocessor(model_type="tree"):
                                     ],
                        remainder='passthrough',
                        verbose_feature_names_out=True)
+
+    if model_type == "nn":
+        return ColumnTransformer(transformers=[
+                                    ("onehot_encoder", OneHotEncoder(sparse=False, handle_unknown="ignore"),["subreddit_id"]),
+                                    ("drop_columns", "drop", ["post_id", "user_id", "snapshot_time"])
+                                    ],
+                       remainder='passthrough',
+                       verbose_feature_names_out=True)
     else:
         # NOTE: If using non-tree based models, we need to scale the data
         raise NotImplementedError(f"Preprocessing data for model type {model_type} is not implemented.")

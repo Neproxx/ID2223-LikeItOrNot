@@ -1,11 +1,15 @@
-RUN_ON_MODAL=False
+RUN_ON_MODAL=True
 
 def g():
-    from utils.training import train_model, upload_model_to_hopsworks, generate_prediction_plots, get_metrics, post_process_predictions
+
+    from utils.training import train_model, upload_model_to_hopsworks, generate_prediction_plots, get_metrics, post_process_predictions, generate_confusion_matrix, train_model_nn
+
+    
     
     # TODO: Try to bin the number of likes into ranges and try to predict the range instead of the exact number
 
-    model, X_train, X_test, y_train, y_test = train_model(bayesian_search=True)
+    model, X_train, X_test, y_train, y_test = train_model_nn(bayesian_search=True)
+
 
     # Note: the model automatically calls transform on all the preprocessing steps and then calls predict on the model
     y_pred = model.predict(X_test)
@@ -25,10 +29,13 @@ def g():
 
     # TODO: how does bayesian handle multi output? Better to just give it the output of the num_likes prediction?
 
+    # confusion matrix
+    #generate_confusion_matrix(y_test, y_pred)
+
 
 import modal
 stub = modal.Stub()
-image = modal.Image.debian_slim().pip_install(["hopsworks","joblib","pandas","xgboost","scikit-learn","seaborn","praw","bayesian-optimization","shap"])
+image = modal.Image.debian_slim().pip_install(["hopsworks","joblib","pandas","xgboost","scikit-learn","seaborn","praw","bayesian-optimization","shap", "tensorflow"])
 @stub.function(image=image,
                schedule=modal.Period(days=1),
                secret=modal.Secret.from_name("reddit-predict"),
