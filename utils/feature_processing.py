@@ -3,6 +3,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 
 import praw
@@ -315,7 +316,8 @@ def get_preprocessor(model_type="tree"):
         return ColumnTransformer(transformers=[
                                     ("onehot_encoder", OneHotEncoder(sparse=False, handle_unknown="ignore"),["subreddit_id"]),
                                     ("column_expander", ColumnExpander(), ["embedding_text", "embedding_title", "embedding_description"]),
-                                    ("drop_columns", "drop", ["post_id", "user_id", "snapshot_time"])
+                                    ("drop_columns", "drop", ["post_id", "user_id", "snapshot_time"]),
+                                    ("scaler", StandardScaler(), ["day_of_week", "hour_of_day", "text_length"])
                                     ],
                        remainder='passthrough',
                        verbose_feature_names_out=True)
