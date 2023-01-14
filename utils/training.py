@@ -16,7 +16,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
-
+from sklearn.preprocessing import OneHotEncoder
 
 def get_full_dataset(fs):
     """
@@ -154,12 +154,22 @@ def get_optimal_hyperparameters_nn(n_iterations):
     Uses evaluate_model as black box function to optimize the hyperparameters of the model.
     """
 
-    
-
     print("Loading data...")
     X_train, X_test, X_val, y_train, y_test, y_val = get_model_features(with_validation_set=True, version=None)
     print("Done.")
 
+    # drop columns: post_id, user_id, snapshot_time
+    # the preproccessing didnt seem to do its job so i dropped manually here
+    # X_train = X_train.drop(columns=["post_id", "user_id", "snapshot_time", "subreddit_id"])
+
+    from sklearn.preprocessing import StandardScaler
+
+    scaler = StandardScaler()
+    scaler.fit(X_train)
+    X_train = scaler.transform(X_train)
+    X_test = scaler.transform(X_test)
+    X_val = scaler.transform(X_val)
+   
     print("Starting Bayesian Optimization...")
     def evaluate_model(learning_rate,dropout,hidden_layer_size):
         """
@@ -175,20 +185,19 @@ def get_optimal_hyperparameters_nn(n_iterations):
             "nn"
         )
 
+        X_train_tf = tf.convert_to_tensor(X_train)
+        X_val_tf = tf.convert_to_tensor(X_val)
+        y_train_tf = tf.convert_to_tensor(y_train)
+        y_val_tf = tf.convert_to_tensor(y_val)
+
         # extract model from pipeline
         model = model.named_steps["model"]  
         model.compile(loss="mse", optimizer=keras.optimizers.Adam(learning_rate=learning_rate), metrics=["mae", "mse"])
 
-        # train model
-        # to transform the numpy array to a tensor we need to use tf.convert_to_tensor
-        # transform numpy array int to float32
-
-        # print all column names and types of training data
-
-        model.fit(X_train, y_train, epochs=100, verbose=0)
-        y_pred = model.predict(X_val)
+        model.fit(X_train_tf, y_train_tf, epochs=100, verbose=0)
+        y_pred = model.predict(X_val_tf)
         y_pred = post_process_predictions(y_pred)
-        rmse_num_likes = mean_squared_error(y_val, y_pred, squared=False, multioutput="raw_values")[0]
+        rmse_num_likes = mean_squared_error(y_val_tf, y_pred, squared=False, multioutput="raw_values")[0]
         #mae = mean_absolute_error(y_test, y_pred, multioutput="raw_values")
         #r2 = r2_score(y_test, y_pred, multioutput="raw_values")
         return -rmse_num_likes
@@ -210,7 +219,6 @@ def get_optimal_hyperparameters_nn(n_iterations):
         target = evaluate_model(**next_point_to_probe)
         print("Target: ", target)
         optimizer.register(params=next_point_to_probe, target=target)
-
 
 
 def train_model(bayesian_search=True, bayesian_n_iterations=15):

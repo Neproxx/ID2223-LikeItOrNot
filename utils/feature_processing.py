@@ -314,6 +314,7 @@ def get_preprocessor(model_type="tree"):
     if model_type == "nn":
         return ColumnTransformer(transformers=[
                                     ("onehot_encoder", OneHotEncoder(sparse=False, handle_unknown="ignore"),["subreddit_id"]),
+                                    ("column_expander", ColumnExpander(), ["embedding_text", "embedding_title", "embedding_description"]),
                                     ("drop_columns", "drop", ["post_id", "user_id", "snapshot_time"])
                                     ],
                        remainder='passthrough',
