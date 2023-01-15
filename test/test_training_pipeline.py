@@ -22,5 +22,5 @@ def test_full_training(use_bayesian_search, bayesian_n_iterations):
 
     # Upvote ratio can only be in interval [0,1]
     upvote_ratio_idx = 1
-    assert y_pred[upvote_ratio_idx, :].min() >= 0, "upvote ratio must be >= 0"
-    assert y_pred[upvote_ratio_idx, :].max() <= 1, "upvote ratio must be <= 1"
+    assert y_pred[:, upvote_ratio_idx].min() >= 0, "upvote ratio must be >= 0"
+    assert y_pred[:, upvote_ratio_idx].max() <= 1, "upvote ratio must be <= 1"
