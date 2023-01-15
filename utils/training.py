@@ -187,11 +187,11 @@ def train_model(bayesian_search=True, bayesian_n_iterations=10, use_gpu=False):
     else:
         model = get_model_pipeline(
             get_regressor(
-                n_estimators=2300,
-                max_depth=12,
-                eta=0.01,
-                colsample_bytree=0.90,
-                subsample=0.55,
+                n_estimators=2250,
+                max_depth=4,
+                eta=0.067,
+                colsample_bytree=0.70,
+                subsample=0.88,
                 use_gpu=use_gpu
             ),
             "tree"
@@ -289,6 +289,7 @@ def generate_prediction_plots(y_test, y_pred, output_dir):
     ax1.set_xscale("log")
     ax1.set_yscale("log")
     fig.savefig(os.path.join(output_dir, "prediction_error_logscale.png"))
+    plt.clf()
 
 
 def generate_shap_forceplot(model: Pipeline, df_features, output_dir, clear_figure=True):
