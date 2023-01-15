@@ -4,8 +4,8 @@ Scalable machine learning system to predict the number of likes and the upvote r
 
 - **Feature pipeline** - extracts new posts from reddit to grow the dataset
 - **Training pipeline** - Trains an Xgboost regressor to predict the number of likes and upvote ratio of a given post. Hyperparameters are chosen with Bayesian optimization.
-- **Interactive UI** - Given a user name, subreddit, post title, post text and date & time, the UI generates a prediction and provides an explanation of how the features affected the prediction result using Shap values. The UI accesses pre-processing functions of the main repository through a git submodule to avoid redundancies and inconsistencies.
-- **Dashboard** - Provides insights into model performance and the impact of each feature.
+- **Interactive UI** - Given a user name, subreddit, post title, post text and date & time, the UI generates a prediction and provides an explanation of how the features affected the prediction result using Shap values. The UI accesses pre-processing functions of the main repository through a git submodule to avoid redundancies and inconsistencies. The UI can be found on [Huggingface](https://huggingface.co/spaces/Neprox/like-it-or-not).
+- **Dashboard** - Provides insights into model performance and the impact of each feature. The dashboard can be found on [Huggingface](https://huggingface.co/spaces/Neprox/reddit-dashboard).
 
 All components are modular so that they can be tested and scaled optimally. The feature and training pipeline can be executed locally or on Modal with the option to accelerate training using a GPU. Great expectations are used to verify that data extracted during the feature pipeline matches known invariants. Unit tests are executed via a Github workflow on every commit and make sure that the main components of the feature and training pipeline still work. After passing all tests, the feature pipeline deployment that runs on a daily schedule on Modal is updated automatically.
 
@@ -119,7 +119,7 @@ At the end of the feature pipeline, the extracted data is tested against a set o
 
 We use `continuous integration (CI)` with Github actions to execute a number of unit tests on every commit. Since extracting features from posts is not deterministic over time, we cannot test for the actual values extracted (imagine for example that a user is deleted). We use an archived post for testing to minimize the risk of the tests failing for reasons beyond our control. The main purpose of the tests is to verify that, following a new Github commit, feature extraction and model training is still working and the extracted data is not empty. After the tests were run successfully, we use `continuous deployment (CD)` to update the feature pipeline deployment on Modal within the Github workflow.
 
-## Running the script
+## Running the scripts
 
 Firstly, if you want to run the scripts locally, make sure to have created a .env file that contains the necessary environment variables namely. If you plan on running the scripts on modal, you have to add the environment variables there. <span style="color:red">Add all of them to the same secret called "reddit-predict"</span>.
 
