@@ -480,6 +480,23 @@ def upload_model_to_hopsworks(model: Pipeline, X_train, y_train, metrics, model_
     joblib.dump(model, model_dir + "/reddit_model.pkl")
     print(f"Model saved to disk: {os.path.isfile(model_dir + '/reddit_model.pkl')}")
 
+    ### Upload dashboard data to model directory
+    # Huggingface has problems reading from Hopsworks due to port issues
+    # Therefore, we upload the required data to the model directory here already
+    try:
+        fs = project.get_feature_store()
+        posts_fg = fs.get_feature_group("reddit_posts", version=os.getenv("POSTS_FG_VERSION", default=1))
+        users_fg = fs.get_feature_group("reddit_users", version=os.getenv("USERS_FG_VERSION", default=1))
+        subreddits_fg = fs.get_feature_group("reddit_subreddits", version=os.getenv("SUBREDDITS_FG_VERSION", default=1))
+        full_join = posts_fg.select(features=["post_id", "snapshot_time", "num_likes", "upvote_ratio"]).join(
+                            users_fg.select(features=["user_id", "snapshot_time"]), on=["user_id", "snapshot_time"]).join(
+                                subreddits_fg.select(features=["subreddit_id", "snapshot_time"]), on=["subreddit_id", "snapshot_time"])
+        df_dashboard = full_join.read()
+        df_dashboard.to_pickle(os.path.join(model_dir, "df_dashboard.pkl"))
+    except Exception as e:
+        print(f"Could not upload dashboard data to model directory: {e}")
+    ### 
+
     # Specify the schema of the model's input/output (names, data types, ...)
     input_schema = Schema(X_train)
     output_schema = Schema(y_train)

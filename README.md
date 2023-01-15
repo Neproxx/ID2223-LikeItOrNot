@@ -165,3 +165,9 @@ Hopsworks sometimes has connection issues which can render the services implemen
 <img src="media/dashboard-1.PNG" alt="Screenshot dashboard - 1" width="750"/>
 
 <img src="media/dashboard-2.PNG" alt="Screenshot dashboard - 2" width="750"/>
+
+<img src="media/dashboard-3.PNG" alt="Screenshot dashboard - 3" width="750"/>
+
+<img src="media/dashboard-4.PNG" alt="Screenshot dashboard - 4" width="750"/>
+
+<img src="media/dashboard-5.PNG" alt="Screenshot dashboard - 5" width="750"/>

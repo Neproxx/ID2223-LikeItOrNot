@@ -6,6 +6,7 @@ import hopsworks
 import pandas as pd
 import joblib
 import traceback
+import matplotlib.pyplot as plt
 from warnings import warn
 
 # Deal with import paths that are different for the main_repo submodule files
@@ -21,7 +22,15 @@ from main_repo.utils.feature_processing import (extract_user_features,
                                                 get_sentiment,
                                                 contains_tldr,
                                                 get_subreddit_names,)
-from main_repo.utils.training import post_process_predictions
+from main_repo.utils.training import post_process_predictions, generate_shap_forceplot
+
+is_local=False
+if is_local:
+    from dotenv import load_dotenv
+    load_dotenv()
+
+MODEL_VERSION=22
+
 
 def get_features(user_name: str, subreddit_name: str, post_title: str, post_text: str, post_date: datetime, post_time: datetime):
     now = datetime.datetime.utcnow()
@@ -95,7 +104,7 @@ def get_features(user_name: str, subreddit_name: str, post_title: str, post_text
 def load_model():
     project = hopsworks.login()
     mr = project.get_model_registry()
-    model_hsfs = mr.get_model("reddit_predict", version=16)
+    model_hsfs = mr.get_model("reddit_predict", version=MODEL_VERSION)
     model_dir = model_hsfs.download()
     model = joblib.load(model_dir + "/reddit_model.pkl")
     return model
@@ -123,7 +132,6 @@ def query_model():
     like_label, like_description, like_emoji = get_like_category(pred_num_likes)
     ratio_label, ratio_description, ratio_emoji = get_ratio_category(pred_upvote_ratio)
 
-    # Introduction
     st.markdown("# Like It Or Not")
     st.markdown("A machine learning service that predicts the number of likes and upvote ratio of your Reddit post before you submit it. The initial computation may take a few seconds, as the model must be downloaded. Please be patient.")
 
@@ -133,13 +141,17 @@ def query_model():
     col2.metric("Upvote Ratio", str(pred_upvote_ratio) + "% " + ratio_emoji)
     st.markdown(f"{like_description} You can expect an upvote ratio of {pred_upvote_ratio} which means that {pred_upvote_ratio}% of the people who see your post will upvote it (and {round(100-pred_upvote_ratio, 2)}% will downvote it). {ratio_description}")
 
+    st.markdown("## Explanation")
+    st.markdown("Below you can see how different features of your post affected the final prediction. " + 
+                "The diagram shows the default value that would have been predicted in case no features about your post were known. " +
+                "In addition, every feature is associated with a bar the color and length of which indicate the magnitude and type of impact it had on the prediction. " +
+                "A long bar with red color states that the feature increased the prediction value by a large amount. " +
+                "The exact meaning of the feature names and their values can be found at the [main Github repository](https://github.com/Neproxx/ID2223-LikeItOrNot). ")
+    generate_shap_forceplot(model, df_features, output_dir="reddit_model", clear_figure=False)
+    st.pyplot(plt.gcf(), clear_figure=False)
+
     st.session_state.has_predicted = True
 
-    # TODO: Get most impactful features with shap
-    #st.markdown("## Explanation")
-    #st.write("The predicted number of likes and upvote ratio are based on a machine learning model that was trained on data from Reddit.")
-    #st.write("The impactful features table shows the features that had the biggest impact on the prediction according to the SHAP values of the model.")
-    #impactful_features.table(...)
 
 def get_like_category(num_likes, include_emoji=True):
     # 0-10, 11-100, 101-1000, 1000+
