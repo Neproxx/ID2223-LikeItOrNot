@@ -2,7 +2,7 @@
 
 Scalable machine learning system to predict the number of likes and the upvote ratio a reddit post is going to get if the user decides to post it. The service consists of the following components which are explained in detail in their respective sections:
 
-- **Feature pipeline** - extracts new posts from reddit to grow the dataset
+- **Feature pipeline** - Extracts new posts from reddit to grow the dataset
 - **Training pipeline** - Trains an Xgboost regressor to predict the number of likes and upvote ratio of a given post. Hyperparameters are chosen with Bayesian optimization.
 - **Interactive UI** - Given a user name, subreddit, post title, post text and date & time, the UI generates a prediction and provides an explanation of how the features affected the prediction result using Shap values. The UI accesses pre-processing functions of the main repository through a git submodule to avoid redundancies and inconsistencies. The UI can be found on [Huggingface](https://huggingface.co/spaces/Neprox/like-it-or-not).
 - **Dashboard** - Provides insights into model performance and the impact of each feature. The dashboard can be found on [Huggingface](https://huggingface.co/spaces/Neprox/reddit-dashboard).
@@ -11,13 +11,13 @@ All components are modular so that they can be tested and scaled optimally. The 
 
 ## Feature Pipeline
 
-The feature pipeline is deployed on modal and runs on a daily schedule. It scans a set of subreddits for new posts / comments, pre-processes them and adds them to the feature store on hopsworks. If the user wants to extract and preprocess many samples in a short time, it is possible to schedule many instances of the feature pipeline that extract samples from different subreddits which demonstrated high scalability. A long list of subreddits are crawled on a daily basis, these include for example:
+The feature pipeline is `deployed on Modal` and runs on a daily schedule. It scans a set of subreddits for new posts, pre-processes them and adds them to the feature store on hopsworks. If it is required to extract and preprocess many samples in a short time, it is possible to schedule many instances of the feature pipeline that extract samples from different subreddits which demonstrated high scalability. A long list of subreddits are crawled on a daily basis, these include for example:
 
 - /r/AskReddit
 - /r/explainlikeimfive
 - /r/Showerthoughts
 
-The script extracts data for three entity types that are stored in their individual tables named reddit_users, reddit_posts and reddit_subreddits. Some of the features represent e.g. the raw text and are only kept for analysis and debugging reasons. See the enumeration and description of all features below.
+The script extracts data for `three entity types that are stored in their individual tables` named reddit_users, reddit_posts and reddit_subreddits. Some of the features represent e.g. the raw text and are only kept for analysis and debugging reasons. We `utilized existing transformer based models` from Huggingface to obtain text embeddings and sentiment scores. See the enumeration and description of all features below.
 
 ### reddit_posts
 
@@ -87,7 +87,7 @@ The script extracts data for three entity types that are stored in their individ
 
 ## Training Pipeline
 
-We use an XGBoost regressor as the prediction model and select its hyperparameters using Bayesian Optimization on a separate validation set. The decision for XGBoost is rooted in its general modeling power and its efficient training process that allows for extensive hyperparameter search. In addition to that, the SHAP library for machine learning explainability can be apploed to this tree based model. As a consequence, we can see the magnitude and type of impact of the different features on the predictions. In particular, we can give an immediate explanation of the prediction to the user in the UI and give advice on how to improve the post (e.g. changing the time of day of posting on Reddit). In addition to the XGBoost model, we post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
+We use an `XGBoost regressor` as the prediction model and select its hyperparameters using `Bayesian Optimization` on a separate validation set. The decision for XGBoost is rooted in its general modeling power and its efficient training process that allows for extensive hyperparameter search. In addition to that, the `SHAP library for machine learning explainability` can be apploed to this tree based model. As a consequence, we can see the magnitude and type of impact of the different features on the predictions. In particular, we can give an immediate explanation of the prediction to the user in the UI and give advice on how to improve the post (e.g. changing the time of day of posting on Reddit). In addition to the XGBoost model, we post-process the predictions to reflect the fact that the upvote ratio can only be within the range [0,1].
 
 ### Handling imbalances
 
