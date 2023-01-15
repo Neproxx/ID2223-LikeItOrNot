@@ -4,7 +4,7 @@ BAYESIAN_SEARCH=True
 BAYESIAN_ITERATIONS=7
 
 def g():
-    from utils.training import train_model, upload_model_to_hopsworks, generate_prediction_plots, get_metrics, post_process_predictions
+    from utils.training import train_model, upload_model_to_hopsworks, generate_prediction_plots, get_metrics, post_process_predictions, generate_shap_summary_plots, generate_confusion_matrix
 
     model, X_train, X_test, y_train, y_test = train_model(bayesian_search=BAYESIAN_SEARCH, bayesian_n_iterations=BAYESIAN_ITERATIONS, use_gpu=USE_GPU)
 
@@ -16,16 +16,18 @@ def g():
     upvote_ratio_idx = y_test.columns.get_loc("upvote_ratio")
     y_pred[upvote_ratio_idx] = y_pred[upvote_ratio_idx].clip(0, 1)
 
-    generate_prediction_plots(y_test, y_pred)
+    output_dir = "reddit_model"
+
+    generate_prediction_plots(y_test, y_pred, output_dir)
     
     metrics = get_metrics(y_test, y_pred)
 
-    # TODO: General shap evaluation
+    generate_shap_summary_plots(model, X_test, output_dir)
 
-    # TODO: Generate confusion matrix for ranges of likes
+    generate_confusion_matrix(y_test, y_pred, output_dir)
 
     try:
-        upload_model_to_hopsworks(model, X_train, y_train, metrics)
+        upload_model_to_hopsworks(model, X_train, y_train, metrics, output_dir)
     except Exception as e:
         import traceback
         import pickle

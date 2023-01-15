@@ -62,7 +62,7 @@ def test_extract_subreddit_features(subreddit, snapshot_time):
 @pytest.mark.parametrize("user, snapshot_time", [(post.author, snapshot_time)])
 def test_extract_user_features(user, snapshot_time):
     df = extract_user_features(user, snapshot_time)
-    
+
     assert df is not None and df.size > 0, "The dataframe should not be empty after extracting features from user"
     assert df.shape == (1, 15), f"Expected 15 columns after extracting features from user but got {df.shape[1]}"
 

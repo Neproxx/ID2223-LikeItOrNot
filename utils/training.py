@@ -4,12 +4,13 @@ import numpy as np
 import xgboost
 import hopsworks
 import joblib
+import shap
 import seaborn as sns
 import matplotlib.pyplot as plt
 from hsml.schema import Schema
 from hsml.model_schema import ModelSchema
 from bayes_opt import BayesianOptimization, UtilityFunction
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error, mean_squared_log_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error, mean_squared_log_error, confusion_matrix
 from sklearn.pipeline import Pipeline
 
 # Huggingface UI must import from submodule "main_repo"
@@ -259,7 +260,7 @@ def get_metrics(y_test, y_pred):
     return metrics
 
 
-def generate_prediction_plots(y_test, y_pred):
+def generate_prediction_plots(y_test, y_pred, output_dir):
     print("Creating plots...")
     if not os.path.isdir("reddit_model"):
         os.mkdir("reddit_model")
@@ -284,42 +285,191 @@ def generate_prediction_plots(y_test, y_pred):
     ax1.plot([min_likes, max_likes], [min_likes, max_likes], color='green')
     ax2.plot([min_ratio, max_ratio], [min_ratio, max_ratio], color='green')
 
-    fig.savefig("reddit_model/prediction_error.png")
+    fig.savefig(os.path.join(output_dir, "prediction_error.png"))
     ax1.set_xscale("log")
     ax1.set_yscale("log")
-    fig.savefig("reddit_model/prediction_error_logscale.png")
+    fig.savefig(os.path.join(output_dir, "prediction_error_logscale.png"))
 
 
-#def generate_shap_forceplot(model: Pipeline, X_test):
-#    # TODO
-#    if not os.path.isdir("reddit_model"):
-#        os.mkdir("reddit_model")
-#
-#    import shap
-#    explainer = shap.TreeExplainer(model.named_steps["model"])
-#
-#    #def shap_plot(sample): 
-#    #    shap_values = explainer.shap_values(sample)
-#    #    p = shap.force_plot(explainer.expected_value, shap_values, sample)
-#    #    plt.savefig('shap_force_plot.svg')
-#    #    plt.savefig("shap_force_plot.png")
-#    #    plt.close()
-#    #    return p
-#    
-#    X_test_preprocessed = model.transform(X_test)
-#    sample = X_test_preprocessed[0]
-#    shap_values = explainer.shap_values([sample])
-#    # shap_value[0][0] is num_likes shap value for the first (and only) sample
-#    p = shap.force_plot(explainer.expected_value[0], shap_values[0][0], sample, matplotlib=True, show=False)
-#    plt.tight_layout()
-#    plt.savefig("reddit_model/shap_force_plot.png")
+def generate_shap_forceplot(model: Pipeline, df_features, output_dir, clear_figure=True):
+    """
+    :param df_features: DataFrame containing exactly one sample with all the feature values.
+    """
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+
+    assert df_features.shape[0] == 1, "df_features must contain exactly one sample"
+
+    explainer = shap.TreeExplainer(model.named_steps["model"])
+    feature_names = model.named_steps["preprocessor"].get_feature_names_out()
+
+    X_prep = model[:-1].transform(df_features)
+    sample = X_prep[0]
+
+    # explainer.shap_values() outputs an array with dimensions (n_target, n_samples, n_features)
+    # Convert from list of arrays to single array
+    shap_values = explainer.shap_values(X_prep)
+    shap_values = np.concatenate(shap_values, axis=0)
+    idx_likes = 0
+    idx_upvote_ratio = 1
+
+    ### Raw force plots
+    #shap.force_plot(explainer.expected_value[idx_likes], shap_values[idx_likes], sample, feature_names, matplotlib=True, show=False)
+    #plt.tight_layout()
+    #plt.savefig(os.path.join(output_dir, "shap_force_plot_num_likes.png"))
+    #plt.clf()
+
+    #shap.force_plot(explainer.expected_value[idx_upvote_ratio], shap_values[idx_upvote_ratio], sample, feature_names, matplotlib=True, show=False)
+    #plt.tight_layout()
+    #plt.savefig(os.path.join(output_dir, "shap_force_plot_upvote_ratio.png"))
+    #plt.clf()
+
+    ### Compact force plots
+    #   Aggregate shap values of embeddings (as sum of values) and plot them as a more compact force plot
+    shap_values = shap_values[idx_likes]
+
+    # Get the indices of the features that represent the embedding features
+    idx_embedding_text = np.where([feature_name.startswith("embedding_text") for feature_name in feature_names])[0]
+    idx_embedding_title = np.where([feature_name.startswith("embedding_title") for feature_name in feature_names])[0]
+    idx_embedding_description = np.where([feature_name.startswith("embedding_description") for feature_name in feature_names])[0]
+
+    # Sum the SHAP and feature values of the embeddings
+    shap_values_sum_embedding_text = np.sum(shap_values[idx_embedding_text])
+    shap_values_sum_embedding_title = np.sum(shap_values[idx_embedding_title])
+    shap_values_sum_embedding_description = np.sum(shap_values[idx_embedding_description])
+    sample_sum_embedding_text = np.sum(sample[idx_embedding_text])
+    sample_sum_embedding_title = np.sum(sample[idx_embedding_title])
+    sample_sum_embedding_description = np.sum(sample[idx_embedding_description])
+
+    # Get indices that do not contain the string "embedding"
+    idx_not_embedding = np.where([not feature_name.startswith("embedding") for feature_name in feature_names])[0]
+
+    # Create new array with all features where embedding features are aggregated
+    feature_names_compact = np.concatenate(
+                                [feature_names[idx_not_embedding],
+                                ["embedding_text", "embedding_title", "embedding_description"]
+                            ])
+    shap_values_compact = np.concatenate(
+                                [shap_values[idx_not_embedding],
+                                    [shap_values_sum_embedding_text, shap_values_sum_embedding_title, shap_values_sum_embedding_description]
+                            ])
+    sample_compact = np.concatenate(
+                                [sample[idx_not_embedding],
+                                    [sample_sum_embedding_text, sample_sum_embedding_title, sample_sum_embedding_description]
+                            ])
+    
+    shap.force_plot(explainer.expected_value[idx_likes], shap_values_compact, sample_compact, feature_names_compact, matplotlib=True, show=False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_force_plot_num_likes_compact.png"))
+    if clear_figure:
+        plt.clf()
 
 
-def upload_model_to_hopsworks(model: Pipeline, X_train, y_train, metrics):
+def generate_shap_summary_plots(model: Pipeline, X, output_dir):
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+
+    explainer = shap.TreeExplainer(model.named_steps["model"])
+    feature_names = model.named_steps["preprocessor"].get_feature_names_out()
+    X_preprocessed = model[:-1].transform(X)
+    shap_values = explainer.shap_values(X_preprocessed)
+
+    ##### Create summary plots with all of the 1000+ features (show only the top 20 features)
+    idx_likes = 0
+    shap.summary_plot(shap_values[idx_likes], X_preprocessed, feature_names, show=False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_summary_plot_num_likes.png"))
+    plt.clf()
+
+    idx_upvote_ratio = 1
+    shap.summary_plot(shap_values[idx_upvote_ratio], X_preprocessed, feature_names, show=False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_summary_plot_upvote_ratio.png"))
+    plt.clf()
+
+
+    ##### Create more compact plots with absolute shap values where embedding features are aggregated (only for num_likes)
+    # Average the absolute SHAP values for each feature
+    shap_values_abs = np.abs(shap_values[idx_likes])
+    shap_values_abs = np.mean(shap_values_abs, axis=0)
+
+    # Get the indices of the features that contain the string "embedding_text", "embedding_title", "embedding_description"
+    feature_names = model.named_steps["preprocessor"].get_feature_names_out()
+    feature_names = np.array(feature_names)
+    idx_embedding_text = np.where([feature_name.startswith("embedding_text") for feature_name in feature_names])[0]
+    idx_embedding_title = np.where([feature_name.startswith("embedding_title") for feature_name in feature_names])[0]
+    idx_embedding_description = np.where([feature_name.startswith("embedding_description") for feature_name in feature_names])[0]
+
+    # Aggregate the SHAP values for the features that contain the string "embedding_text", "embedding_title", "embedding_description"
+    shap_values_abs_sum_embedding_text = np.sum(shap_values_abs[idx_embedding_text])
+    shap_values_abs_sum_embedding_title = np.sum(shap_values_abs[idx_embedding_title])
+    shap_values_abs_sum_embedding_description = np.sum(shap_values_abs[idx_embedding_description])
+
+    # Get indices that do not contain the string "embedding"
+    idx_not_embedding = np.where([not feature_name.startswith("embedding") for feature_name in feature_names])[0]
+
+    # Create new array with all features where embedding features are aggregated
+    feature_names_compact = np.concatenate(
+                                [feature_names[idx_not_embedding],
+                                ["embedding_text", "embedding_title", "embedding_description"]
+                            ])
+    shap_values_compact = np.concatenate(
+                                [shap_values_abs[idx_not_embedding],
+                                    [shap_values_abs_sum_embedding_text, shap_values_abs_sum_embedding_title, shap_values_abs_sum_embedding_description]
+                            ])
+    sns.set()
+    plt.barh(feature_names_compact, shap_values_compact)
+    plt.xlabel("Average impact of feature\n(embeddings are summed)")
+    plt.ylabel("Feature")
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_summary_plot_compact.png"))
+    plt.xscale("log")
+    plt.savefig(os.path.join(output_dir, "shap_summary_plot_compact_log.png"))
+    plt.clf()
+
+
+def map_predictions_to_success(predictions):
+    """
+    Maps predictions into categories of
+    - "no success" = 0-10 likes,
+    - "mild success" = 11-100 likes,
+    - "great success" = 101-1000 likes,
+    - "huge success" = 1000+ likes
+    that correspond to the integers 0-3
+    """
+    success = []
+    for i in range(len(predictions)):
+        if predictions[i] < 11:
+            success.append(0)
+        elif predictions[i] < 101:
+            success.append(1)
+        elif predictions[i] < 1001:
+            success.append(2)
+        else:
+            success.append(3)
+    return success
+
+
+def generate_confusion_matrix(y_test, y_pred, output_dir):
+    print("Creating confusion matrix...")
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+    y_test_success = map_predictions_to_success(y_test["num_likes"].values)
+    y_pred_success = map_predictions_to_success(y_pred[:,0])
+    cm = confusion_matrix(y_test_success, y_pred_success)
+    fig, ax = plt.subplots(figsize=(10, 10))
+    sns.heatmap(cm, annot=True, fmt='d', xticklabels=["no success (0-10)", "mild success (11-100)", "great success (101-1000)", "huge success (1000+)"], yticklabels=["no success", "mild success", "great success", "huge success"])
+    plt.ylabel('Actual Success')
+    plt.xlabel('Predicted Success')
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_dir, "confusion_matrix.png"))
+    plt.clf()
+
+
+def upload_model_to_hopsworks(model: Pipeline, X_train, y_train, metrics, model_dir="reddit_model"):
     print("Uploading model to Hopsworks...")
     project = hopsworks.login()
 
-    model_dir="reddit_model"
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
     if os.path.isfile(model_dir + "/reddit_model.pkl"):
